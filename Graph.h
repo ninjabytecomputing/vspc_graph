@@ -1,70 +1,108 @@
 #ifndef GRAPH_HAS_BEEN_INCLUDED
 #define GRAPH_HAS_BEEN_INCLUDED
 
-#include "UTAdjacencyMatrix.h"
-
-#include <queue>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace vspc
 {
 
-template <typename NodeType>
-Graph
+class Graph
 {
 public:
-    using Edge = std::pair<size_t, size_t>;
+    using Edge = std::pair<int, int>;
 
-    Graph(const std::vector<NodeType>& nodes, const std::vector<Edge>& edges);
+    Graph();
+    explicit Graph(const std::vector<Edge>& edges);
 
-    void computeFundamentalCycles();
+    // Default copy, move, and destructor are fine
+
+    void addEdge(const int i, const int j);
+
+    bool isConnected(const int i, const int j) const;
+
+    size_t numNodes() const { return mConnectivity.size(); }
+    size_t numEdges() const { return mNumEdges; }
+
+    std::string str() const;
 
 private:
-
-    struct TreeNode {
-        size_t    index;
-        TreeNode* parent;
-    };
-
-    std::vector<NodeType> mNodes;
-    UTAdjacencyMatrix mAdjMat;
+    size_t                       mNumEdges;
+    std::map<int, std::set<int>> mConnectivity;
 };
+
+std::ostream& operator<<(std::ostream& os, const Graph& obj);
 
 // -----------------------------------------------------------------------------
 
-template <typename NodeType>
-Graph<NodeType>::Graph(const std::vector<NodeType&> nodes,
-                   const std::vector<Edge>& edges)
-    : mNodes(nodes)
-    , mAdjMat(nodes.size())
+Graph::Graph() : mNumEdges(0)
 {
-    for (const auto& edge : edges) {
-        mAdj.addEdge(edge.first, edge.second);
+    // empty
+}
+
+Graph::Graph(const std::vector<Edge>& edges) : mNumEdges(0)
+{
+    for (const Edge& edge : edges) {
+        addEdge(edge.first, edge.second);
     }
 }
 
-template <typename NodeType>
-Graph<NodeType>::computeFundamentalCycles()
+void
+Graph::addEdge(const int i, const int j)
 {
-    std::vector<TreeNode> spTree(mNodes.size());
-    std::queue<size_t> nodeIdxQueue;
-
-    // Arbitrarily start with the first node of the graph
-    nodeIdxQueue.push(0);
-
-    // Copy the adjacency matrix since we'll be removing edges
-    UTAdjacencyMatrix adjMat = mAdjMat;
-
-    // Initially, all tree nodes are its own parent
-    for (size_t i = 0, n = mNodes.size(); i < n; ++i) {
-        spTree[i].index  = i;
-        spTree[i].parent = &(spTree[i]);
+    const auto it1 = mConnectivity.find(i);
+    if (it1 != mConnectivity.end()) {
+        const auto it2 = it1->second.find(j);
+        if (it2 == it1->second.end()) {
+            mConnectivity[i].insert(j);
+            mConnectivity[j].insert(i);
+            ++mNumEdges;
+        }
+    } else {
+        mConnectivity[i].insert(j);
+        mConnectivity[j].insert(i);
+        ++mNumEdges;
     }
+}
 
-    // TODO WIP
-    // while (!nodeIdxQueue.empty()) {
-    // }
+bool
+Graph::isConnected(const int i, const int j) const
+{
+    const auto it1 = mConnectivity.find(i);
+    if (it1 != mConnectivity.end()) {
+        const auto it2 = it1->second.find(j);
+        if (it2 != it1->second.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string
+Graph::str() const
+{
+    std::ostringstream os;
+    os << "Graph:\n";
+    os << "  Number of nodes: " << numNodes() << "\n";
+    os << "  Number of edges: " << numEdges() << "\n";
+    for (auto&& [node, connections] : mConnectivity) {
+        os << "  Node: " << node << " ---> ";
+        for (auto&& n : connections) {
+            os << n << " ";
+        }
+        os << "\n";
+    }
+    return os.str();
+}
+
+std::ostream&
+operator<<(std::ostream& os, const Graph& obj)
+{
+    return os << obj.str();
 }
 
 } // namespace vspc
