@@ -3,7 +3,8 @@
 #include <iostream>
 
 // #define FIRST_TEST
-// #define SECOND_TEST
+#define SECOND_TEST
+// #define THIRD_TEST
 
 int main() {
 
@@ -37,17 +38,23 @@ int main() {
 
 #ifdef SECOND_TEST
     vspc::UndirectedGraph g1, g2;
+    g1.addEdge(0, 1);
     g1.addEdge(1, 2);
-    g1.addEdge(3, 1);
+    g1.addEdge(2, 6);
 
-    g2.addEdge(3, 2);
-    g2.addEdge(2, 1);
+    g2.addEdge(0, 1);
+    g2.addEdge(1, 5);
+    g2.addEdge(5, 6);
 
     vspc::UndirectedGraph out = g1 ^ g2;
+    out.prune();
 
+    std::cout << g1 << std::endl;
+    std::cout << g2 << std::endl;
     std::cout << out << std::endl;
 #endif
 
+#ifdef THIRD_TEST
     vspc::UndirectedGraph graph;
     // Case 1
     // graph.addEdge(0, 1);
@@ -63,10 +70,10 @@ int main() {
     graph.addEdge(3, 4);
     graph.addEdge(0, 4);
 
-    // graph.addEdge(5, 1);
-    // graph.addEdge(2, 6);
-    // graph.addEdge(5, 6);
-    // graph.addEdge(1, 2);
+    graph.addEdge(5, 1);
+    graph.addEdge(2, 6);
+    graph.addEdge(5, 6);
+    graph.addEdge(1, 2);
 
     // graph.addEdge(3, 6);
     // graph.addEdge(2, 3);
@@ -83,5 +90,6 @@ int main() {
         std::cout << "Fundamental cycle:" << std::endl;
         std::cout << c << std::endl;
     }
+#endif
 
 }

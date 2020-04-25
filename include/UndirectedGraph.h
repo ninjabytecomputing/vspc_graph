@@ -24,12 +24,14 @@ public:
     explicit UndirectedGraph(const std::vector<Edge>& edges);
 
     void addNode(int i);
-    // void removeNode(int i);
+    void removeNode(int i);
 
     void addEdge(int i, int j);
     void removeEdge(int i, int j);
 
-    bool isConnected(int i, int j) const;
+    bool hasEdge(int i, int j) const;
+
+    void prune();
 
     std::set<int> getNodes() const;
     std::set<int> getConnections(int i) const;
@@ -44,7 +46,6 @@ public:
 private:
     size_t                       mNumEdges;
     std::map<int, std::set<int>> mConnectivity;
-    std::map<int, std::set<int>> mSymConnectivity;
 };
 
 // -----------------------------------------------------------------------------
@@ -73,21 +74,21 @@ UndirectedGraph::addNode(int i)
     mConnectivity[i];
 }
 
-// void
-// UndirectedGraph::removeNode(int i)
-// {
-//     const auto it1 = mConnectivity.find(i);
-//     if (it1 != mConnectivity.end()) {
-//         mNumEdges -= it1->second.size();
-//         const auto itEnd = mConnectivity.erase(it1);
-//         for (auto it = mConnectivity.begin(); it != itEnd; ++it) {
-//             // Calling std::set::erase() on the key_type will return
-//             // the number of elements removed. Note that this value
-//             // should always be at most 1.
-//             mNumEdges -= it->second.erase(i);
-//         }
-//     }
-// }
+void
+UndirectedGraph::removeNode(int i)
+{
+    const auto it1 = mConnectivity.find(i);
+    if (it1 != mConnectivity.end()) {
+        mNumEdges -= it1->second.size();
+        const auto itEnd = mConnectivity.erase(it1);
+        for (auto it = mConnectivity.begin(); it != itEnd; ++it) {
+            // Calling std::set::erase() on the key_type will return
+            // the number of elements removed. Note that this value
+            // should always be at most 1.
+            mNumEdges -= it->second.erase(i);
+        }
+    }
+}
 
 void
 UndirectedGraph::addEdge(int i, int j)
@@ -104,15 +105,11 @@ UndirectedGraph::addEdge(int i, int j)
         if (it2 == it1->second.end()) {
             mConnectivity[i].insert(j);
             mConnectivity[j];
-            mSymConnectivity[i].insert(j);
-            mSymConnectivity[j].insert(i);
             ++mNumEdges;
         }
     } else {
         mConnectivity[i].insert(j);
         mConnectivity[j];
-        mSymConnectivity[i].insert(j);
-        mSymConnectivity[j].insert(i);
         ++mNumEdges;
     }
 }
@@ -131,15 +128,13 @@ UndirectedGraph::removeEdge(int i, int j)
         const auto it2 = it1->second.find(j);
         if (it2 != it1->second.end()) {
             it1->second.erase(it2);
-            mSymConnectivity[i].erase(j);
-            mSymConnectivity[j].erase(i);
             --mNumEdges;
         }
     }
 }
 
 bool
-UndirectedGraph::isConnected(int i, int j) const
+UndirectedGraph::hasEdge(int i, int j) const
 {
     // No self-loops
     if (i == j) return false;
@@ -157,6 +152,39 @@ UndirectedGraph::isConnected(int i, int j) const
     return false;
 }
 
+void
+UndirectedGraph::prune()
+{
+    auto it = mConnectivity.begin();
+    const auto itEnd = mConnectivity.end();
+    while (it != itEnd) {
+        // Aliases for convenience
+        const int&           node        = it->first;
+        const std::set<int>& connections = it->second;
+
+        if (connections.empty()) {
+            // Reverse lookup to see if this node is connected with any nodes
+            // whose index are less than it.
+            std::set<int> tmp;
+            for (auto j = mConnectivity.begin(); j != it; ++j) {
+                // Alias
+                const auto& s = j->second;
+                if (s.find(node) != s.end()) {
+                    tmp.insert(j->first);
+                }
+            }
+
+            if (tmp.empty()) {
+                // Erase automatically moves the iterator to the
+                // next element
+                it = mConnectivity.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
 std::set<int>
 UndirectedGraph::getNodes() const
 {
@@ -170,8 +198,8 @@ UndirectedGraph::getNodes() const
 std::set<int>
 UndirectedGraph::getConnections(int i) const
 {
-    const auto it = mSymConnectivity.find(i);
-    if (it != mSymConnectivity.end()) {
+    const auto it = mConnectivity.find(i);
+    if (it != mConnectivity.end()) {
         return it->second;
     } else {
         return {};
@@ -185,54 +213,32 @@ UndirectedGraph::operator^=(const UndirectedGraph& rhs)
 
     std::set<int> rhsNodes = rhs.getNodes();
 
-    for (auto&& [myNode, myConnections] : mSymConnectivity) {
-        const auto it1 = rhs.mSymConnectivity.find(myNode);
-        if (it1 != rhs.mSymConnectivity.end()) {
+    for (auto&& [myNode, myConnections] : mConnectivity) {
+        const auto it1 = rhs.mConnectivity.find(myNode);
+        if (it1 != rhs.mConnectivity.end()) {
 
             rhsNodes.erase(myNode);
 
             std::set<int> symDiff;
-
-            // std::cout << std::endl;
-            // for (auto&& x : myConnections) {
-            //     std::cout << x << " ";
-            // }
-            // std::cout << std::endl;
-            // for (auto&& x : it1->second) {
-            //     std::cout << x << " ";
-            // }
-            // std::cout << std::endl;
-
             std::set_symmetric_difference(
                     myConnections.begin(), myConnections.end(),
                     it1->second.begin(), it1->second.end(),
                     std::inserter(symDiff, symDiff.begin()));
 
-            // for (auto&& x : symDiff) {
-            //     std::cout << x << " ";
-            // }
-            // std::cout << std::endl;
+            mConnectivity[myNode] = symDiff;
+            mNumEdges += symDiff.size();
 
-            mSymConnectivity[myNode] = symDiff;
-            mConnectivity[myNode].clear();
-            for (int x : symDiff) {
-                if (x > myNode) {
-                    mConnectivity[myNode].insert(x);
-                    ++mNumEdges;
-                }
-            }
         } else {
             // Do nothing, but count edges
             mNumEdges += mConnectivity[myNode].size();
         }
+    }
 
-        for (int n : rhsNodes) {
-            mSymConnectivity[n] = rhs.mSymConnectivity.at(n);
-            mConnectivity[n] = rhs.mConnectivity.at(n);
-            mNumEdges += mConnectivity.at(n).size();
-        }
-
-
+    // RHS graph might still have nodes that this graph didn't have,
+    // so just add in the edges.
+    for (int n : rhsNodes) {
+        mConnectivity[n] = rhs.mConnectivity.at(n);
+        mNumEdges += mConnectivity.at(n).size();
     }
 
     return *this;
@@ -252,7 +258,7 @@ UndirectedGraph::str() const
     std::ostringstream os;
     os << "Number of nodes: " << numNodes() << "\n";
     os << "Number of edges: " << numEdges() << "\n";
-    for (auto it = mSymConnectivity.begin(), itEnd = mSymConnectivity.end(); it != itEnd; ++it) {
+    for (auto it = mConnectivity.begin(), itEnd = mConnectivity.end(); it != itEnd; ++it) {
         // Aliases for convenience
         const int&           node        = it->first;
         const std::set<int>& connections = it->second;
@@ -362,10 +368,14 @@ public:
                     // Perform symmetric difference to obtain the fundamental cycle.
                     mFundamentalCycles.push_back(ga ^ gb);
 
-                    // std::cout << "Found a cycle" << std::endl;
-                    // std::cout << ga << std::endl;
-                    // std::cout << gb << std::endl;
-                    // std::cout << mFundamentalCycles.back() << std::endl;
+#ifdef _DEBUG_
+                    std::cout << "######################################" << std::endl;
+                    std::cout << "Found a cycle" << std::endl;
+                    std::cout << ga << std::endl;
+                    std::cout << gb << std::endl;
+                    std::cout << mFundamentalCycles.back() << std::endl;
+                    std::cout << "######################################" << std::endl;
+#endif
 
                     // TODO Do I really need to do this much work just to get the
                     // fundamental cycle?
@@ -413,7 +423,6 @@ private:
 
     const UndirectedGraph& mGraph;
     std::vector<UndirectedGraph> mFundamentalCycles;
-
 };
 
 } // namespace vspc
