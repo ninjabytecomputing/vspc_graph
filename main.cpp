@@ -3,7 +3,7 @@
 #include <iostream>
 
 // #define FIRST_TEST
-#define SECOND_TEST
+// #define SECOND_TEST
 
 int main() {
 
@@ -47,4 +47,41 @@ int main() {
 
     std::cout << out << std::endl;
 #endif
+
+    vspc::UndirectedGraph graph;
+    // Case 1
+    // graph.addEdge(0, 1);
+    // graph.addEdge(0, 2);
+    // graph.addEdge(0, 3);
+    // graph.addEdge(1, 2);
+    // graph.addEdge(2, 3);
+
+    // Case 2
+    graph.addEdge(0, 1);
+    graph.addEdge(1, 2);
+    graph.addEdge(2, 3);
+    graph.addEdge(3, 4);
+    graph.addEdge(0, 4);
+
+    // graph.addEdge(5, 1);
+    // graph.addEdge(2, 6);
+    // graph.addEdge(5, 6);
+    // graph.addEdge(1, 2);
+
+    // graph.addEdge(3, 6);
+    // graph.addEdge(2, 3);
+    // graph.addEdge(2, 6);
+
+    std::cout << "Original graph" << std::endl;
+    std::cout << graph << std::endl;
+
+    vspc::FundamentalCyclesOp op(graph);
+    op.compute();
+    const std::vector<vspc::UndirectedGraph>& cycles = op.getFundamentalCycles();
+
+    for (const auto& c : cycles) {
+        std::cout << "Fundamental cycle:" << std::endl;
+        std::cout << c << std::endl;
+    }
+
 }
