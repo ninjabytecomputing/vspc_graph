@@ -31,7 +31,7 @@ public:
 
     bool hasEdge(int i, int j) const;
 
-    void prune();
+    UndirectedGraph& prune();
 
     std::set<int> getNodes() const;
     std::set<int> getConnections(int i) const;
@@ -152,7 +152,7 @@ UndirectedGraph::hasEdge(int i, int j) const
     return false;
 }
 
-void
+UndirectedGraph&
 UndirectedGraph::prune()
 {
     auto it = mConnectivity.begin();
@@ -162,27 +162,30 @@ UndirectedGraph::prune()
         const int&           node        = it->first;
         const std::set<int>& connections = it->second;
 
+        bool found = false;
         if (connections.empty()) {
             // Reverse lookup to see if this node is connected with any nodes
             // whose index are less than it.
-            std::set<int> tmp;
             for (auto j = mConnectivity.begin(); j != it; ++j) {
                 // Alias
                 const auto& s = j->second;
                 if (s.find(node) != s.end()) {
-                    tmp.insert(j->first);
+                    found = true;
+                    break;
                 }
             }
 
-            if (tmp.empty()) {
-                // Erase automatically moves the iterator to the
-                // next element
+            // If no connections were found, then remove the current node.
+            if (!found) {
                 it = mConnectivity.erase(it);
             } else {
                 ++it;
             }
+        } else {
+            ++it;
         }
     }
+    return *this;
 }
 
 std::set<int>
@@ -331,7 +334,7 @@ public:
         }
 
         std::stack<MapConstIterator> treeIterStack;
-        treeIterStack.push(spTree.cbegin());
+        treeIterStack.push(spTree.begin());
 
         // Copy the UndirectedGraph since we will be removing edges
         UndirectedGraph spGraph = mGraph;
@@ -345,6 +348,7 @@ public:
 
             // std::cout << "DEBUG ::: Processing node " << currentNodeIdx << std::endl;
 
+            // TODO This call needs to get ALLLLL connections.
             const std::set<int> connections = spGraph.getConnections(currentNodeIdx);
 
             for (const int j : connections) {
@@ -396,6 +400,8 @@ public:
     }
 
     const std::vector<UndirectedGraph>& getFundamentalCycles() const { return mFundamentalCycles; }
+          std::vector<UndirectedGraph>& getFundamentalCycles()       { return mFundamentalCycles; }
+
 
 private:
 

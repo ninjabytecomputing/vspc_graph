@@ -3,8 +3,8 @@
 #include <iostream>
 
 // #define FIRST_TEST
-#define SECOND_TEST
-// #define THIRD_TEST
+// #define SECOND_TEST
+#define THIRD_TEST
 
 int main() {
 
@@ -75,21 +75,24 @@ int main() {
     graph.addEdge(5, 6);
     graph.addEdge(1, 2);
 
-    // graph.addEdge(3, 6);
-    // graph.addEdge(2, 3);
-    // graph.addEdge(2, 6);
+    graph.addEdge(3, 6);
+    graph.addEdge(2, 3);
+    graph.addEdge(2, 6);
 
     std::cout << "Original graph" << std::endl;
     std::cout << graph << std::endl;
 
     vspc::FundamentalCyclesOp op(graph);
     op.compute();
-    const std::vector<vspc::UndirectedGraph>& cycles = op.getFundamentalCycles();
+    auto& cycles = op.getFundamentalCycles();
 
-    for (const auto& c : cycles) {
-        std::cout << "Fundamental cycle:" << std::endl;
-        std::cout << c << std::endl;
+    std::cout << "----------------------------------------------------------\n";
+    std::cout << "Found " << cycles.size() << " fundamental cycles:\n\n";
+
+    for (auto&& c : cycles) {
+        std::cout << c.prune() << "\n";
     }
+    std::cout << "----------------------------------------------------------\n";
 #endif
 
 }
