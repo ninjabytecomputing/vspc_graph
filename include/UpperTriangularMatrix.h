@@ -16,20 +16,36 @@ public:
     using ValueType = T;
 
     explicit UpperTriangularMatrix(const size_t n = 0);
+
     UpperTriangularMatrix(const size_t n, const T& val);
 
     // Default copy, move, and destructor are fine
 
-    size_t dim() const { return mSize; }
-
-    size_t index(size_t i, size_t j) const;
-
+    /// @{
+    /// @brief Two-dimensional index accessors.
+    /// @details These are only provided for user-convenience. It is not
+    /// recommended to use these for performant code.
     const T& operator()(const size_t i, const size_t j) const { return mData[index(i, j)]; }
           T& operator()(const size_t i, const size_t j)       { return mData[index(i, j)]; }
+    /// @}
 
+    /// @{
+    /// @brief One-dimensional (flat) index accessors.
+    /// @details These are the preferred way to access elements of this matrix
+    /// class as long as the user has already precomputed the flat index (and
+    /// is not recomputing the flat index on the fly).
     const T& operator()(const size_t idx) const { return mData[idx]; }
           T& operator()(const size_t idx)       { return mData[idx]; }
+    /// @}
 
+    /// @return Dimension of the square matrix.
+    size_t dim() const { return mSize; }
+
+    /// @return Linear index into the upper-triangular matrix associated with
+    /// the two-dimensional index.
+    size_t index(size_t i, size_t j) const;
+
+    /// @return Human-readable format of the matrix.
     std::string str() const;
 
 private:
@@ -38,7 +54,8 @@ private:
 };
 
 template <typename T>
-std::ostream& operator<<(std::ostream& os, const UpperTriangularMatrix<T>& obj)
+std::ostream&
+operator<<(std::ostream& os, const UpperTriangularMatrix<T>& obj)
 {
     return os << obj.str();
 }
@@ -54,9 +71,9 @@ UpperTriangularMatrix<T>::UpperTriangularMatrix(const size_t n)
 
 template <typename T>
 UpperTriangularMatrix<T>::UpperTriangularMatrix(const size_t n, const T& val)
-    : UpperTriangularMatrix(n)
+    : mSize(n), mData(n * (n + 1) / 2, val)
 {
-    std::fill(mData.begin(), mData.end(), val);
+    // empty
 }
 
 template <typename T>

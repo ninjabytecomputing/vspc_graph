@@ -1,3 +1,4 @@
 # vspc_graph
 
-Find the set of all independent fundamental cycles of a graph.
+Find the smallest set of all the smallest rings (cycles) of an undirected graph.
+
