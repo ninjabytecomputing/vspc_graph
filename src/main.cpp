@@ -47,12 +47,18 @@ int main() {
     graph.addEdge(2, 6);
 #endif
 
+    std::cout << "#############################################" << std::endl;
+    std::cout << "# Input graph" << std::endl;
+    std::cout << "#############################################" << std::endl;
     std::cout << graph << std::endl;
 
-    std::cout << "Initializing SSSR" << std::endl;
-    vspc::SSSR sssrOp(graph);
-    std::cout << "Initializing PID matrices" << std::endl;
-    sssrOp.initializePID();
-    std::cout << "Detecting candidates" << std::endl;
-    sssrOp.makeCandidateSet();
+    vspc::SSSR op(graph);
+    const auto& sssrSet = op.run();
+
+    std::cout << "#############################################" << std::endl;
+    std::cout << "# SSSR" << std::endl;
+    std::cout << "#############################################" << std::endl;
+    for (const vspc::UndirectedGraph& cycle : sssrSet) {
+        std::cout << cycle << std::endl;
+    }
 }

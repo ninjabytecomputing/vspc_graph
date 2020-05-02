@@ -10,125 +10,180 @@
 #include <list>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace vspc
 {
 
-class Path
-{
-public:
-    Path() = default;
-
-    Path(const size_t a, const size_t b)
-    {
-        mList.push_back(a);
-        mList.push_back(b);
-    }
-
-    // Default copy, move, destructor are fine.
-
-    Path& append(const Path& path)
-    {
-        if (mList.front() == path.mList.front()) {
-            auto it = ++(path.mList.cbegin());
-            const auto itEnd = path.mList.cend();
-            for (; it != itEnd; ++it) {
-                mList.push_front(*it);
-            }
-        } else if (mList.front() == path.mList.back()) {
-            auto it = ++(path.mList.crbegin());
-            const auto itBegin = path.mList.crend();
-            for (; it != itBegin; ++it) {
-                mList.push_front(*it);
-            }
-        } else if (mList.back() == path.mList.front()) {
-            auto it = ++(path.mList.cbegin());
-            const auto itEnd = path.mList.cend();
-            for (; it != itEnd; ++it) {
-                mList.push_back(*it);
-            }
-        } else {
-            auto it = ++(path.mList.crbegin());
-            const auto itBegin = path.mList.crend();
-            for (; it != itBegin; ++it) {
-                mList.push_back(*it);
-            }
-        }
-        return *this;
-    }
-
-    size_t length() const { return mList.size(); }
-
-    const std::list<size_t>& nodes() const { return mList; }
-
-    std::string str() const
-    {
-        std::ostringstream os;
-        auto it = mList.cbegin();
-        const auto itEnd = --(mList.cend());
-        for (; it != itEnd; ++it) {
-            os << *it << " -> ";
-        }
-        os << *it;
-        return os.str();
-    }
-
-    std::string rstr() const
-    {
-        std::ostringstream os;
-        auto it = mList.crbegin();
-        const auto itEnd = --(mList.crend());
-        for (; it != itEnd; ++it) {
-            os << *it << " -> ";
-        }
-        os << *it;
-        return os.str();
-    }
-
-private:
-    std::list<size_t> mList;
-};
-
-std::ostream&
-operator<<(std::ostream& os, const Path& obj)
-{
-    return os << obj.str();
-}
-
-Path
-merge(Path p1, const Path& p2)
-{
-    return p1.append(p2);
-}
-
-// -----------------------------------------------------------------------------
+// NOTE I assume that the graphs we're working with only have one connected
+// component. It might be a smart thing to implement a method that counts
+// the number of components...
 
 class SSSR
 {
 public:
+    class Path
+    {
+    public:
+        using iterator       = std::list<size_t>::iterator;
+        using const_iterator = std::list<size_t>::const_iterator;
+
+        Path() = default;
+
+        Path(const size_t a, const size_t b) : mList({a, b}) {}
+
+        // Default copy, move, destructor are fine.
+
+        Path& append(const Path& path);
+
+        iterator       begin()        { return mList.begin(); }
+        const_iterator begin()  const { return mList.begin(); }
+        const_iterator cbegin() const { return mList.cbegin(); }
+
+        iterator       end()        { return mList.end(); }
+        const_iterator end()  const { return mList.end(); }
+        const_iterator cend() const { return mList.cend(); }
+
+        size_t length() const { return mList.size(); }
+
+        std::string str() const;
+
+    private:
+        std::list<size_t> mList;
+    };
+
+    class CandidateSet
+    {
+    public:
+        CandidateSet(const size_t length,
+                     const std::list<Path>& p,
+                     const std::list<Path>& pp)
+            : mLength(length), mPath(p), mPathP(pp) {}
+
+        size_t length() const { return mLength; }
+        const std::list<Path>& getPaths() const { return mPath; }
+        const std::list<Path>& getPathPs() const { return mPathP; }
+
+        friend bool operator<(const CandidateSet& lhs, const CandidateSet& rhs);
+
+    private:
+        const size_t mLength;
+        const std::list<Path>& mPath;
+        const std::list<Path>& mPathP;
+    };
+
     explicit SSSR(const UndirectedGraph& graph);
 
-    void initializePID();
-    void makeCandidateSet();
+    const std::vector<UndirectedGraph>& run();
+
+    const std::vector<UndirectedGraph>& getSSSR() const { return mSSSR; }
 
 private:
+    void _initializePID();
+    void _makeCandidateSet();
+    void _constructSSSR();
+
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
+    size_t                                 mNumSSSR;
     UpperTriangularMatrix<float>           mDold, mDnew;
     UpperTriangularMatrix<std::list<Path>> mP, mPp;
+    std::list<CandidateSet>                mCandidates;
+    std::vector<UndirectedGraph>           mSSSR;
 };
 
 // -----------------------------------------------------------------------------
 
+SSSR::Path&
+SSSR::Path::append(const Path& path)
+{
+    if (mList.front() == path.mList.front()) {
+        auto it = ++(path.mList.cbegin());
+        const auto itEnd = path.mList.cend();
+        for (; it != itEnd; ++it) {
+            mList.push_front(*it);
+        }
+    } else if (mList.front() == path.mList.back()) {
+        auto it = ++(path.mList.crbegin());
+        const auto itBegin = path.mList.crend();
+        for (; it != itBegin; ++it) {
+            mList.push_front(*it);
+        }
+    } else if (mList.back() == path.mList.front()) {
+        auto it = ++(path.mList.cbegin());
+        const auto itEnd = path.mList.cend();
+        for (; it != itEnd; ++it) {
+            mList.push_back(*it);
+        }
+    } else {
+        auto it = ++(path.mList.crbegin());
+        const auto itBegin = path.mList.crend();
+        for (; it != itBegin; ++it) {
+            mList.push_back(*it);
+        }
+    }
+    return *this;
+}
+
+std::string
+SSSR::Path::str() const
+{
+    std::ostringstream os;
+    auto it = mList.cbegin();
+    const auto itEnd = --(mList.cend());
+    for (; it != itEnd; ++it) {
+        os << *it << " -> ";
+    }
+    os << *it;
+    return os.str();
+}
+
+SSSR::Path
+merge(SSSR::Path p1, const SSSR::Path& p2)
+{
+    return p1.append(p2);
+}
+
+UndirectedGraph
+constructGraph(const SSSR::Path& path)
+{
+    UndirectedGraph g;
+    auto itSlow = path.cbegin();
+    auto itFast = ++(path.cbegin());
+    const auto itEnd = path.cend();
+    while (itFast != itEnd) {
+        g.addEdge(*(itSlow++), *(itFast++));
+    }
+    return g;
+}
+
+std::ostream&
+operator<<(std::ostream& os, const SSSR::Path& obj)
+{
+    return os << obj.str();
+}
+
+// -----------------------------------------------------------------------------
+
+bool operator<(const SSSR::CandidateSet& lhs, const SSSR::CandidateSet& rhs)
+{
+    return lhs.mLength < rhs.mLength;
+}
+
+// -----------------------------------------------------------------------------
+
 SSSR::SSSR(const UndirectedGraph& graph)
-    : mDold(graph.numNodes(), INFINITY)
+    : mNumSSSR(graph.numEdges() - graph.numNodes() + 1)
+    , mDold(graph.numNodes(), INFINITY)
     , mDnew(graph.numNodes(), INFINITY)
     , mP(graph.numNodes())
     , mPp(graph.numNodes())
 {
+    mSSSR.reserve(mNumSSSR);
+
     const std::set<int> nodes = graph.getNodes();
-    for (auto i : nodes) {
-        for (auto&& j : graph.getConnections(i)) {
+    for (int i : nodes) {
+        for (int j : graph.getConnections(i)) {
             const size_t ij = mDold.index(i, j);
             mDold(ij) = 1.f;
             mDnew(ij) = 1.f;
@@ -137,10 +192,19 @@ SSSR::SSSR(const UndirectedGraph& graph)
     }
 }
 
-void
-SSSR::initializePID()
+const std::vector<UndirectedGraph>&
+SSSR::run()
 {
-    const auto numNodes = mDold.dim();
+    _initializePID();
+    _makeCandidateSet();
+    _constructSSSR();
+    return mSSSR;
+}
+
+void
+SSSR::_initializePID()
+{
+    const size_t  numNodes = mDold.dim();
     for (size_t k = 0; k < numNodes; ++k) {
         // i <= j < k
         for (size_t i = 0; i < k; ++i) {
@@ -175,7 +239,7 @@ SSSR::initializePID()
         mDold = mDnew;
     }
 
-#ifdef _DEBUG
+#ifdef _VERBOSE
     std::cout << "Matrix P" << std::endl;
     for (size_t i = 0; i < mP.dim(); ++i) {
         for (size_t j = i; j < mP.dim(); ++j) {
@@ -202,7 +266,7 @@ SSSR::initializePID()
 }
 
 void
-SSSR::makeCandidateSet()
+SSSR::_makeCandidateSet()
 {
     const size_t n = mDnew.dim();
     for (size_t i = 0; i < n; ++i) {
@@ -212,10 +276,83 @@ SSSR::makeCandidateSet()
                 continue;
             } else {
                 if (!mPp(ij).empty()) {
-                    std::cout << "Candidate odd ring" << std::endl;
+                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
                 } else {
-                    std::cout << "Candidate even ring" << std::endl;
+                    mCandidates.emplace_back(2 * mDnew(ij), mP(ij), mPp(ij));
                 }
+            }
+        }
+    }
+    mCandidates.sort();
+}
+
+void
+SSSR::_constructSSSR()
+{
+    size_t numRings = 0;
+    for (const CandidateSet& candidate : mCandidates) {
+        if (candidate.length() % 2 == 1) {
+            for (const Path& longPath : candidate.getPathPs()) {
+                const Path& shortPath = candidate.getPaths().front();
+
+                UndirectedGraph g = constructGraph(merge(shortPath, longPath));
+
+                for (const UndirectedGraph& sssr : mSSSR) {
+                    const auto gIt = g.cbegin();
+                    const auto sssrIt = sssr.cbegin();
+
+                    if (gIt->first == sssrIt->first && gIt->second == sssrIt->second) {
+                        // The cycle we just constructed contains a cycle
+                        // in our SSSR set. Perform XOR to remove the
+                        // overlapping portion.
+                        g ^= sssr;
+                    }
+                }
+
+                // At this point, g is now cycle we haven't seen before, in
+                // which case we should insert it into our SSSR set, or g
+                // is empty.
+
+                if (g.numEdges() != 0) {
+                    mSSSR.push_back(g);
+                    ++numRings;
+                }
+
+                if (numRings == mNumSSSR) return;
+            }
+        } else {
+            const std::list<Path>& shortPaths = candidate.getPaths();
+            auto it = shortPaths.cbegin();
+            const auto itEnd = --(shortPaths.cend());
+
+            while (it != itEnd) {
+                // Why can't I just pass the iterators into merge?!
+                const Path& p1 = *it;
+                const Path& p2 = *(++it);
+
+                UndirectedGraph g = constructGraph(merge(p1, p2));
+                for (const UndirectedGraph& sssr : mSSSR) {
+                    const auto gIt = g.cbegin();
+                    const auto sssrIt = sssr.cbegin();
+
+                    if (gIt->first == sssrIt->first && gIt->second == sssrIt->second) {
+                        // The cycle we just constructed contains a cycle
+                        // in our SSSR set. Perform XOR to remove the
+                        // overlapping portion.
+                        g ^= sssr;
+                    }
+                }
+
+                // At this point, g is now cycle we haven't seen before, in
+                // which case we should insert it into our SSSR set, or g
+                // is empty.
+
+                if (g.numEdges() != 0) {
+                    mSSSR.push_back(g);
+                    ++numRings;
+                }
+
+                if (numRings == mNumSSSR) return;
             }
         }
     }

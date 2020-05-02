@@ -20,6 +20,9 @@ class UndirectedGraph
 public:
     using Edge = std::pair<int, int>;
 
+    using iterator       = std::map<int, std::set<int>>::iterator;
+    using const_iterator = std::map<int, std::set<int>>::const_iterator;
+
     UndirectedGraph();
     explicit UndirectedGraph(const std::vector<Edge>& edges);
 
@@ -29,18 +32,37 @@ public:
     void addEdge(int i, int j);
     void removeEdge(int i, int j);
 
+    /// @return @c True if nodes @a i and @j are connected.
     bool hasEdge(int i, int j) const;
 
+    /// Remove all disconnected nodes.
     UndirectedGraph& prune();
 
+    /// @return Set of indices of the nodes.
     std::set<int> getNodes() const;
+    /// @return Set of indices of the nodes that node @a i is connected to.
     std::set<int> getConnections(int i) const;
 
+    /// XOR operation that overwrites this undirected graph.
     UndirectedGraph& operator^=(const UndirectedGraph& rhs);
 
+    /// Swap undirected graphs.
+    void swap(UndirectedGraph& other);
+
+    iterator       begin()        { return mConnectivity.begin(); }
+    const_iterator begin()  const { return mConnectivity.begin(); }
+    const_iterator cbegin() const { return mConnectivity.cbegin(); }
+
+    iterator       end()        { return mConnectivity.end(); }
+    const_iterator end()  const { return mConnectivity.end(); }
+    const_iterator cend() const { return mConnectivity.cend(); }
+
+    /// @return Number of nodes in the graph.
     size_t numNodes() const { return mConnectivity.size(); }
+    /// @return Number of edges in the graph.
     size_t numEdges() const { return mNumEdges; }
 
+    /// @return Human-readable information about this undirected graph.
     std::string str() const;
 
 private:
@@ -245,6 +267,13 @@ UndirectedGraph::operator^=(const UndirectedGraph& rhs)
     }
 
     return *this;
+}
+
+void
+UndirectedGraph::swap(UndirectedGraph& other)
+{
+    std::swap(mNumEdges, other.mNumEdges);
+    std::swap(mConnectivity, other.mConnectivity);
 }
 
 std::string

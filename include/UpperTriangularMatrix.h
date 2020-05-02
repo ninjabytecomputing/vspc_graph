@@ -45,7 +45,7 @@ public:
     /// the two-dimensional index.
     size_t index(size_t i, size_t j) const;
 
-    /// @return Human-readable format of the matrix.
+    /// @return Human-readable information about the matrix.
     std::string str() const;
 
 private:
