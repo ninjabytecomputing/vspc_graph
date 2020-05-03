@@ -5,7 +5,6 @@
 #include "UpperTriangularMatrix.h"
 
 #include <cmath>
-#include <cstdint>
 #include <iostream>
 #include <list>
 #include <sstream>
@@ -22,15 +21,17 @@ namespace vspc
 class SSSR
 {
 public:
+    using NodeType = UndirectedGraph::NodeType;
+
     class Path
     {
     public:
-        using iterator       = std::list<size_t>::iterator;
-        using const_iterator = std::list<size_t>::const_iterator;
+        using iterator       = std::list<NodeType>::iterator;
+        using const_iterator = std::list<NodeType>::const_iterator;
 
         Path() = default;
 
-        Path(const size_t a, const size_t b) : mList({a, b}) {}
+        Path(const NodeType a, const NodeType b) : mList({a, b}) {}
 
         // Default copy, move, destructor are fine.
 
@@ -49,27 +50,31 @@ public:
         std::string str() const;
 
     private:
-        std::list<size_t> mList;
+        std::list<NodeType> mList;
     };
 
     class CandidateSet
     {
     public:
         CandidateSet(const size_t length,
+                     const std::list<Path>& p)
+            : mLength(length), mPath(&p), mPathP(nullptr) {}
+
+        CandidateSet(const size_t length,
                      const std::list<Path>& p,
                      const std::list<Path>& pp)
-            : mLength(length), mPath(p), mPathP(pp) {}
+            : mLength(length), mPath(&p), mPathP(&pp) {}
 
         size_t length() const { return mLength; }
-        const std::list<Path>& getPaths() const { return mPath; }
-        const std::list<Path>& getPathPs() const { return mPathP; }
+        std::list<Path> const * const getPtrPaths() const { return mPath; }
+        std::list<Path> const * const getPtrPathPs() const { return mPathP; }
 
         friend bool operator<(const CandidateSet& lhs, const CandidateSet& rhs);
 
     private:
         const size_t mLength;
-        const std::list<Path>& mPath;
-        const std::list<Path>& mPathP;
+        std::list<Path> const * const mPath;
+        std::list<Path> const * const mPathP;
     };
 
     explicit SSSR(const UndirectedGraph& graph);
@@ -85,6 +90,7 @@ private:
 
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
+    const UndirectedGraph&                 mGraph;
     size_t                                 mNumSSSR;
     UpperTriangularMatrix<float>           mDold, mDnew;
     UpperTriangularMatrix<std::list<Path>> mP, mPp;
@@ -173,17 +179,18 @@ bool operator<(const SSSR::CandidateSet& lhs, const SSSR::CandidateSet& rhs)
 // -----------------------------------------------------------------------------
 
 SSSR::SSSR(const UndirectedGraph& graph)
-    : mNumSSSR(graph.numEdges() - graph.numNodes() + 1)
-    , mDold(graph.numNodes(), INFINITY)
-    , mDnew(graph.numNodes(), INFINITY)
-    , mP(graph.numNodes())
-    , mPp(graph.numNodes())
+    : mGraph(graph)
+    , mNumSSSR(graph.numEdges() - graph.numNodes() + 1)
+    , mDold(graph.maxNode() + 1, INFINITY)
+    , mDnew(graph.maxNode() + 1, INFINITY)
+    , mP(graph.maxNode() + 1)
+    , mPp(graph.maxNode() + 1)
 {
     mSSSR.reserve(mNumSSSR);
 
-    const std::set<int> nodes = graph.getNodes();
-    for (int i : nodes) {
-        for (int j : graph.getConnections(i)) {
+    const std::set<NodeType> nodes = graph.getNodes();
+    for (NodeType i : nodes) {
+        for (NodeType j : graph.getConnections(i)) {
             const size_t ij = mDold.index(i, j);
             mDold(ij) = 1.f;
             mDnew(ij) = 1.f;
@@ -204,34 +211,67 @@ SSSR::run()
 void
 SSSR::_initializePID()
 {
-    const size_t  numNodes = mDold.dim();
-    for (size_t k = 0; k < numNodes; ++k) {
-        // i <= j < k
-        for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
-            for (size_t j = i+1; j < k; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(j, k);
+    const std::set<NodeType> nodes = mGraph.getNodes();
+
+    // Note: lower_bound returns an iterator to the first element that is
+    // greater than or equal to the input. upper_bound returns an
+    // iterator to the first element that is greater than the input.
+
+    for (const size_t k : nodes) {
+
+        // i < k
+        auto iIt    = nodes.cbegin();
+        auto iItEnd = nodes.lower_bound(k);  // equal to k
+
+        for (; iIt != iItEnd; ++iIt) {
+            const size_t ik = mDold.index(*iIt, k);
+
+            // i < j < k
+            auto jIt    = nodes.upper_bound(*iIt);  // larger than i
+            auto jItEnd = nodes.lower_bound(k);     // equal to k
+
+            for (; jIt != jItEnd; ++jIt) {
+                const size_t ij = mDold.index(*iIt, *jIt);
+                const size_t kj = mDold.index(*jIt, k);
+
                 _process(ij, ik, kj);
             }
         }
 
-        // i < k, j >= k
-        for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
-            for (size_t j = k; j < numNodes; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
+        // i < k
+        iIt    = nodes.cbegin();
+        iItEnd = nodes.lower_bound(k);  // equal to k
+
+        for (; iIt != iItEnd; ++iIt) {
+            const size_t ik = mDold.index(*iIt, k);
+
+            // k <= j
+            auto       jIt    = nodes.lower_bound(k);  // equal to k
+            const auto jItEnd = nodes.cend();
+
+            for (; jIt != jItEnd; ++jIt) {
+                const size_t ij = mDold.index(*iIt, *jIt);
+                const size_t kj = mDold.index(k, *jIt);
+
                 _process(ij, ik, kj);
             }
         }
 
-        // k <= i <= j
-        for (size_t i = k; i < numNodes; ++i) {
-            const size_t ik = mDold.index(k, i);
-            for (size_t j = i+1; j < numNodes; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
+        // k <= i
+        iIt    = nodes.lower_bound(k); // equal to k
+        iItEnd = nodes.cend();
+
+        for (; iIt != iItEnd; ++iIt) {
+            const size_t ik = mDold.index(k, *iIt);
+
+            // i < j
+            auto       jIt    = nodes.upper_bound(*iIt);  // greater than i
+            const auto jItEnd = nodes.cend();
+
+            for (; jIt != jItEnd; ++jIt) {
+                const size_t ij = mDold.index(*iIt, *jIt);
+                const size_t kj = mDold.index(k, *jIt);
+
                 _process(ij, ik, kj);
             }
         }
@@ -268,60 +308,86 @@ SSSR::_initializePID()
 void
 SSSR::_makeCandidateSet()
 {
-    const size_t n = mDnew.dim();
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = i + 1; j < n; ++j) {
-            const size_t ij = mDnew.index(i, j);
+    const std::set<NodeType> nodes = mGraph.getNodes();
+
+    for (const size_t i : nodes) {
+
+        auto       jIt    = nodes.upper_bound(i);  // greater than i
+        const auto jItEnd = nodes.cend();
+
+        for (; jIt != jItEnd; ++jIt) {
+            const size_t ij = mDnew.index(i, *jIt);
+
             if (std::isinf(mDnew(ij)) || (mP(ij).size() == 1 && mPp(ij).empty())) {
                 continue;
             } else {
                 if (!mPp(ij).empty()) {
                     mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
                 } else {
-                    mCandidates.emplace_back(2 * mDnew(ij), mP(ij), mPp(ij));
+                    mCandidates.emplace_back(2 * mDnew(ij), mP(ij));
                 }
             }
         }
     }
+    // Sort so we construct our SSSR set starting with the shorted cycles.
     mCandidates.sort();
 }
 
 void
 SSSR::_constructSSSR()
 {
-    size_t numRings = 0;
+    // Functor for trimming overlaps with already-constructed cycles
+    // via the XOR operation.
+    auto trimOverlap = [this](UndirectedGraph& graph)
+    {
+        for (const UndirectedGraph& cycle : mSSSR) {
+            // Note: We need to "refresh" this iterator every iteration
+            // because the XOR from the previous iteration might have
+            // removed the node and its connections.
+            const auto               gIt   = graph.cbegin();
+            const NodeType           gNode = gIt->first;
+            const std::set<NodeType> gConn = gIt->second;
+
+            // Get the connections of the node index of the current cycle.
+            const std::set<NodeType> otherConn = cycle.getConnections(gNode);
+
+            // Nothing to see here - move on.
+            if (otherConn.empty()) continue;
+
+            // If the sets of connections match, then the cycle we just
+            // constructed contains a cycle in our SSSR set. Perform XOR
+            // to remove the overlapping portion.
+            if (gConn == otherConn) {
+                graph ^= cycle;
+            }
+        }
+    };
+
     for (const CandidateSet& candidate : mCandidates) {
         if (candidate.length() % 2 == 1) {
-            for (const Path& longPath : candidate.getPathPs()) {
-                const Path& shortPath = candidate.getPaths().front();
+#ifdef _DEBUG
+            assert(candidate.getPtrPathPs());
+#endif
+            for (const Path& longPath : *candidate.getPtrPathPs()) {
+                const Path& shortPath = candidate.getPtrPaths()->front();
 
-                UndirectedGraph g = constructGraph(merge(shortPath, longPath));
+                UndirectedGraph candidate = constructGraph(merge(shortPath, longPath));
 
-                for (const UndirectedGraph& sssr : mSSSR) {
-                    const auto gIt = g.cbegin();
-                    const auto sssrIt = sssr.cbegin();
+                // Use XOR to trim away cycles from the newly generated cycle that
+                // overlap with cycles in our SSSR set.
+                trimOverlap(candidate);
 
-                    if (gIt->first == sssrIt->first && gIt->second == sssrIt->second) {
-                        // The cycle we just constructed contains a cycle
-                        // in our SSSR set. Perform XOR to remove the
-                        // overlapping portion.
-                        g ^= sssr;
-                    }
+                // At this point, the new candidate is either a brand new cycle
+                // (which will be inserted into our SSSR set) or an empty graph.
+                if (candidate.numEdges() != 0) {
+                    mSSSR.push_back(candidate);
                 }
 
-                // At this point, g is now cycle we haven't seen before, in
-                // which case we should insert it into our SSSR set, or g
-                // is empty.
-
-                if (g.numEdges() != 0) {
-                    mSSSR.push_back(g);
-                    ++numRings;
-                }
-
-                if (numRings == mNumSSSR) return;
+                // Early exit if all the correct number of cycles has been found.
+                if (mSSSR.size() == mNumSSSR) return;
             }
         } else {
-            const std::list<Path>& shortPaths = candidate.getPaths();
+            const std::list<Path>& shortPaths = *candidate.getPtrPaths();
             auto it = shortPaths.cbegin();
             const auto itEnd = --(shortPaths.cend());
 
@@ -330,29 +396,20 @@ SSSR::_constructSSSR()
                 const Path& p1 = *it;
                 const Path& p2 = *(++it);
 
-                UndirectedGraph g = constructGraph(merge(p1, p2));
-                for (const UndirectedGraph& sssr : mSSSR) {
-                    const auto gIt = g.cbegin();
-                    const auto sssrIt = sssr.cbegin();
+                UndirectedGraph candidate = constructGraph(merge(p1, p2));
 
-                    if (gIt->first == sssrIt->first && gIt->second == sssrIt->second) {
-                        // The cycle we just constructed contains a cycle
-                        // in our SSSR set. Perform XOR to remove the
-                        // overlapping portion.
-                        g ^= sssr;
-                    }
+                // Use XOR to trim away cycles from the newly generated cycle that
+                // overlap with cycles in our SSSR set.
+                trimOverlap(candidate);
+
+                // At this point, the new candidate is either a brand new cycle
+                // (which will be inserted into our SSSR set) or an empty graph.
+                if (candidate.numEdges() != 0) {
+                    mSSSR.push_back(candidate);
                 }
 
-                // At this point, g is now cycle we haven't seen before, in
-                // which case we should insert it into our SSSR set, or g
-                // is empty.
-
-                if (g.numEdges() != 0) {
-                    mSSSR.push_back(g);
-                    ++numRings;
-                }
-
-                if (numRings == mNumSSSR) return;
+                // Early exit if all the correct number of cycles has been found.
+                if (mSSSR.size() == mNumSSSR) return;
             }
         }
     }

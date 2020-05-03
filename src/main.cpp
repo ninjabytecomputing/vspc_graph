@@ -4,9 +4,9 @@
 
 #include <iostream>
 
-#define TWO_RINGS
+// #define TWO_RINGS
 // #define PAPER_EXAMPLE
-// #define THREE_RINGS
+#define THREE_RINGS
 
 int main() {
     vspc::UndirectedGraph graph;
@@ -37,14 +37,14 @@ int main() {
     graph.addEdge(3, 4);
     graph.addEdge(0, 4);
 
-    graph.addEdge(5, 1);
-    graph.addEdge(2, 6);
-    graph.addEdge(5, 6);
+    graph.addEdge(1000, 1);
+    graph.addEdge(2, 50);
+    graph.addEdge(1000, 50);
     graph.addEdge(1, 2);
 
-    graph.addEdge(3, 6);
+    graph.addEdge(3, 50);
     graph.addEdge(2, 3);
-    graph.addEdge(2, 6);
+    graph.addEdge(2, 50);
 #endif
 
     std::cout << "#############################################" << std::endl;
