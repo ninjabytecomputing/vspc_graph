@@ -60,6 +60,7 @@ int main(int argc, char* argv[]) {
         // Sanity check!
         if (cycles[i].numEdges() != cycles[i].numNodes()) {
             std::cout << "Cycle " << i << " failed the sanity check\n";
+            std::cout << cycles[i] << std::endl;
         } else {
             // std::cout << cycles[i] << std::endl;
             std::cout << convertGraphToPath(cycles[i]) << "\n";

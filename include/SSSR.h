@@ -321,6 +321,8 @@ SSSR::_makeCandidateSet()
 void
 SSSR::_constructSSSR()
 {
+    // TODO I don't think this is right
+
     // Functor for trimming overlaps with already-constructed cycles
     // via the XOR operation.
     auto trimOverlap = [this](UndirectedGraph& graph)
@@ -369,7 +371,7 @@ SSSR::_constructSSSR()
                 }
 
                 // Early exit if all the correct number of cycles has been found.
-                if (mSSSR.size() == mNumSSSR) return;
+                // if (mSSSR.size() == mNumSSSR) return;
             }
         } else {
             const std::list<Path>& shortPaths = *candidate.getPtrPaths();
@@ -394,7 +396,7 @@ SSSR::_constructSSSR()
                 }
 
                 // Early exit if all the correct number of cycles has been found.
-                if (mSSSR.size() == mNumSSSR) return;
+                // if (mSSSR.size() == mNumSSSR) return;
             }
         }
     }
