@@ -352,49 +352,26 @@ SSSR::_constructSSSR()
 {
     // TODO I don't think this is right
 
-    // Functor for trimming overlaps with already-constructed cycles
-    // via the XOR operation.
-    // auto trimOverlap = [this](UndirectedGraph& graph)
-    // {
-    //     for (const UndirectedGraph& cycle : mSSSR) {
-    //         // Note: We need to "refresh" this iterator every iteration
-    //         // because the XOR from the previous iteration might have
-    //         // removed the node and its connections.
-    //         const auto               gIt   = graph.cbegin();
-    //         const NodeType           gNode = gIt->first;
-    //         const std::set<NodeType> gConn = gIt->second;
-
-    //         // Get the connections of the node index of the current cycle.
-    //         const std::set<NodeType> otherConn = cycle.getConnections(gNode);
-
-    //         // Nothing to see here - move on.
-    //         if (otherConn.empty()) continue;
-
-    //         // If the sets of connections match, then the cycle we just
-    //         // constructed contains a cycle in our SSSR set. Perform XOR
-    //         // to remove the overlapping portion.
-    //         if (gConn == otherConn) {
-    //             graph ^= cycle;
-    //         }
-    //     }
-    // };
-
     for (const CandidateRing& candidate : mCandidates) {
         if (candidate.length() % 2 == 1) {
 #ifdef _DEBUG
             assert(candidate.getPtrPathPs());
 #endif
+            // TODO Do I need to loop through all the short paths??
             for (const Path& longPath : *candidate.getPtrPathPs()) {
                 const Path& shortPath = candidate.getPtrPaths()->front();
-
-                // UndirectedGraph candidate = constructGraph(merge(shortPath, longPath));
                 UndirectedGraph g0 = constructGraph(longPath);
                 UndirectedGraph g1 = constructGraph(shortPath);
 
                 g0 ^= g1;
 
                 if (g0.numEdges() != longPath.length() + shortPath.length()) {
-                    // Overlap happened, not a good candidate ring
+                    // Edges overlapped, not a good candidate ring
+                    continue;
+                }
+
+                if (g0.numNodes() != g0.numEdges()) {
+                    // Nodes on the two paths overlapped
                     continue;
                 }
 
@@ -410,23 +387,12 @@ SSSR::_constructSSSR()
                 }
 
                 if (!alreadyConnected) {
+                    // if (g0.numEdges() == 7) {
+                    //     std::cout << a << " " << b << std::endl;
+                    //     std::cout << convertGraphToPath(g0) << std::endl;
+                    // }
                     mSSSR.push_back(g0);
-                    break;
                 }
-
-                // Use XOR to trim away cycles from the newly generated cycle that
-                // overlap with cycles in our SSSR set.
-                // trimOverlap(g0);
-
-                // At this point, the new candidate is either a brand new cycle
-                // (which will be inserted into our SSSR set) or an empty graph.
-                // if (g0.numEdges() != 0) {
-                //     mSSSR.push_back(g0);
-                //     break;
-                // }
-
-                // Early exit if all the correct number of cycles has been found.
-                // if (mSSSR.size() == mNumSSSR) return;
             }
         } else {
             const std::list<Path>& shortPaths = *candidate.getPtrPaths();
@@ -449,6 +415,11 @@ SSSR::_constructSSSR()
                     continue;
                 }
 
+                if (g0.numNodes() != g0.numEdges()) {
+                    // Nodes on the two paths overlapped
+                    continue;
+                }
+
                 NodeType a = *p1.cbegin();
                 NodeType b = *(--p1.cend());
                 bool alreadyConnected = false;
@@ -462,7 +433,6 @@ SSSR::_constructSSSR()
 
                 if (!alreadyConnected) {
                     mSSSR.push_back(g0);
-                    break;
                 }
 
                 // Use XOR to trim away cycles from the newly generated cycle that
