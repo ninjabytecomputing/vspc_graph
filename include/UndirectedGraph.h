@@ -31,6 +31,8 @@ public:
     void addEdge(NodeType i, NodeType j);
     void removeEdge(NodeType i, NodeType j);
 
+    /// @return @c True if node @a i is in the graph.
+    bool hasNode(NodeType i) const;
     /// @return @c True if nodes @a i and @j are connected.
     bool hasEdge(NodeType i, NodeType j) const;
 
@@ -159,6 +161,12 @@ UndirectedGraph::removeEdge(NodeType i, NodeType j)
 }
 
 bool
+UndirectedGraph::hasNode(NodeType i) const
+{
+    return mConnectivity.find(i) != mConnectivity.cend();
+}
+
+bool
 UndirectedGraph::hasEdge(NodeType i, NodeType j) const
 {
     // No self-loops
@@ -168,9 +176,9 @@ UndirectedGraph::hasEdge(NodeType i, NodeType j) const
     if (j < i) std::swap(i, j);
 
     const auto it1 = mConnectivity.find(i);
-    if (it1 != mConnectivity.end()) {
+    if (it1 != mConnectivity.cend()) {
         const auto it2 = it1->second.find(j);
-        if (it2 != it1->second.end()) {
+        if (it2 != it1->second.cend()) {
             return true;
         }
     }
