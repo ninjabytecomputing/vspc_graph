@@ -56,10 +56,12 @@ public:
     const_iterator end()  const { return mConnectivity.end(); }
     const_iterator cend() const { return mConnectivity.cend(); }
 
+    /// @return Largest node index.
+    NodeType maxNode() const { return mConnectivity.crbegin()->first; }
+    /// @return Smallest node index.
+    NodeType minNode() const { return mConnectivity.cbegin()->first; }
     /// @return Number of nodes in the graph.
     size_t numNodes() const { return mConnectivity.size(); }
-    /// @return Largest node index.
-    NodeType maxNode() const { return mConnectivity.rbegin()->first; }
     /// @return Number of edges in the graph.
     size_t numEdges() const { return mNumEdges; }
 
