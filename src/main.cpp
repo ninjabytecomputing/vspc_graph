@@ -58,7 +58,6 @@ int main(int argc, char* argv[]) {
             std::cout << "Cycle " << i << " failed the sanity check\n";
             std::cout << cycles[i] << std::endl;
         } else {
-            // std::cout << cycles[i] << std::endl;
             std::cout << convertGraphToPath(cycles[i]) << "\n";
         }
     }

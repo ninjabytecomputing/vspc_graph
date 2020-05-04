@@ -107,10 +107,12 @@ vspc::SSSR::Path convertGraphToPath(vspc::UndirectedGraph graph)
     using NodeType = vspc::UndirectedGraph::NodeType;
     using Path     = vspc::SSSR::Path;
 
-    NodeType node = graph.minNode();
+    const NodeType startNode = graph.minNode();
+    NodeType node = startNode;
     std::set<NodeType> conn = graph.getConnections(node);
 
     Path path(node, *conn.cbegin());
+    graph.removeNode(node);
     node = *conn.cbegin();
 
     while (graph.prune().numNodes() != 0) {
@@ -132,6 +134,8 @@ vspc::SSSR::Path convertGraphToPath(vspc::UndirectedGraph graph)
         }
     }
 
+    // Append the last path to make it a full cycle
+    path.append(Path{*(--path.cend()), startNode});
     return path;
 }
 
@@ -350,104 +354,83 @@ SSSR::_makeCandidateRing()
 void
 SSSR::_constructSSSR()
 {
-    // TODO I don't think this is right
-
     for (const CandidateRing& candidate : mCandidates) {
         if (candidate.length() % 2 == 1) {
 #ifdef _DEBUG
             assert(candidate.getPtrPathPs());
 #endif
-            // TODO Do I need to loop through all the short paths??
             for (const Path& longPath : *candidate.getPtrPathPs()) {
                 const Path& shortPath = candidate.getPtrPaths()->front();
-                UndirectedGraph g0 = constructGraph(longPath);
-                UndirectedGraph g1 = constructGraph(shortPath);
+                for (const Path& shortPath : *candidate.getPtrPaths()) {
 
-                g0 ^= g1;
+                    UndirectedGraph g0 = constructGraph(longPath);
+                    UndirectedGraph g1 = constructGraph(shortPath);
+                    g0 ^= g1;
 
-                if (g0.numEdges() != longPath.length() + shortPath.length()) {
-                    // Edges overlapped, not a good candidate ring
-                    continue;
-                }
-
-                if (g0.numNodes() != g0.numEdges()) {
-                    // Nodes on the two paths overlapped
-                    continue;
-                }
-
-                NodeType a = *shortPath.cbegin();
-                NodeType b = *(--shortPath.cend());
-                bool alreadyConnected = false;
-                if (a > b) std::swap(a, b);
-                for (const UndirectedGraph& ring : mSSSR) {
-                    if (ring.hasNode(a) && ring.hasNode(b)) {
-                        alreadyConnected = true;
-                        break;
+                    // Edges overlapped, not a good candidate
+                    if (g0.numEdges() != longPath.length() + shortPath.length()) {
+                        continue;
                     }
-                }
 
-                if (!alreadyConnected) {
-                    // if (g0.numEdges() == 7) {
-                    //     std::cout << a << " " << b << std::endl;
-                    //     std::cout << convertGraphToPath(g0) << std::endl;
-                    // }
-                    mSSSR.push_back(g0);
+                    // Nodes overlapped, not a good candidate
+                    if (g0.numNodes() != g0.numEdges()) {
+                        continue;
+                    }
+
+                    NodeType a = *shortPath.cbegin();
+                    NodeType b = *(--shortPath.cend());
+                    bool alreadyConnected = false;
+                    if (a > b) std::swap(a, b);
+                    for (const UndirectedGraph& ring : mSSSR) {
+                        if (ring.hasNode(a) && ring.hasNode(b)) {
+                            alreadyConnected = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyConnected) {
+                        mSSSR.push_back(g0);
+                    }
                 }
             }
         } else {
             const std::list<Path>& shortPaths = *candidate.getPtrPaths();
-            auto it = shortPaths.cbegin();
-            const auto itEnd = --(shortPaths.cend());
+            const auto itEnd = shortPaths.cend();
+            for (auto itA = shortPaths.cbegin(); itA != itEnd; ++itA) {
+                auto itBInit = itA;
+                for (auto itB = ++itBInit; itB != itEnd; ++itB) {
+                    const Path& p1 = *itA;
+                    const Path& p2 = *itB;
 
-            while (it != itEnd) {
-                // Why can't I just pass the iterators into merge?!
-                const Path& p1 = *it;
-                const Path& p2 = *(++it);
+                    UndirectedGraph g0 = constructGraph(p1);
+                    UndirectedGraph g1 = constructGraph(p2);
+                    g0 ^= g1;
 
-                // UndirectedGraph candidate = constructGraph(merge(p1, p2));
-                UndirectedGraph g0 = constructGraph(p1);
-                UndirectedGraph g1 = constructGraph(p2);
+                    // Edges overlapped, not a good candidate
+                    if (g0.numEdges() != p1.length() + p2.length()) {
+                        continue;
+                    }
 
-                g0 ^= g1;
+                    // Nodes overlapped, not a good candidate
+                    if (g0.numNodes() != g0.numEdges()) {
+                        continue;
+                    }
 
-                if (g0.numEdges() != p1.length() + p2.length()) {
-                    // Overlap happened, not a good candidate ring
-                    continue;
-                }
+                    NodeType a = *p1.cbegin();
+                    NodeType b = *(--p1.cend());
+                    bool alreadyConnected = false;
+                    if (a > b) std::swap(a, b);
+                    for (const UndirectedGraph& ring : mSSSR) {
+                        if (ring.hasNode(a) && ring.hasNode(b)) {
+                            alreadyConnected = true;
+                            break;
+                        }
+                    }
 
-                if (g0.numNodes() != g0.numEdges()) {
-                    // Nodes on the two paths overlapped
-                    continue;
-                }
-
-                NodeType a = *p1.cbegin();
-                NodeType b = *(--p1.cend());
-                bool alreadyConnected = false;
-                if (a > b) std::swap(a, b);
-                for (const UndirectedGraph& ring : mSSSR) {
-                    if (ring.hasNode(a) && ring.hasNode(b)) {
-                        alreadyConnected = true;
-                        break;
+                    if (!alreadyConnected) {
+                        mSSSR.push_back(g0);
                     }
                 }
-
-                if (!alreadyConnected) {
-                    mSSSR.push_back(g0);
-                }
-
-                // Use XOR to trim away cycles from the newly generated cycle that
-                // overlap with cycles in our SSSR set.
-                // trimOverlap(g0);
-
-                // At this point, the new candidate is either a brand new cycle
-                // (which will be inserted into our SSSR set) or an empty graph.
-                // if (g0.numEdges() != 0) {
-                //     mSSSR.push_back(g0);
-                //     break;
-                // }
-
-                // Early exit if all the correct number of cycles has been found.
-                // if (mSSSR.size() == mNumSSSR) return;
             }
         }
     }
