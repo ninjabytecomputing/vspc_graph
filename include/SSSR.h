@@ -83,6 +83,7 @@ public:
 
     const std::vector<UndirectedGraph>& run();
 
+    size_t numTheoreticalCycles() const { return mNumSSSR; }
     const std::vector<UndirectedGraph>& getSSSR() const { return mSSSR; }
 
 private:
@@ -107,29 +108,34 @@ private:
 SSSR::Path&
 SSSR::Path::append(const Path& path)
 {
-    if (mList.front() == path.mList.front()) {
-        auto it = ++(path.mList.cbegin());
-        const auto itEnd = path.mList.cend();
-        for (; it != itEnd; ++it) {
-            mList.push_front(*it);
-        }
-    } else if (mList.front() == path.mList.back()) {
-        auto it = ++(path.mList.crbegin());
-        const auto itBegin = path.mList.crend();
-        for (; it != itBegin; ++it) {
-            mList.push_front(*it);
-        }
-    } else if (mList.back() == path.mList.front()) {
+    if (mList.empty()) {
+        mList = path.mList;
+        return *this;
+    }
+
+    if (mList.back() == path.mList.front()) {
         auto it = ++(path.mList.cbegin());
         const auto itEnd = path.mList.cend();
         for (; it != itEnd; ++it) {
             mList.push_back(*it);
+        }
+    } else if (mList.back() == path.mList.back()) {
+        auto it = ++(path.mList.crbegin());
+        const auto itBegin = path.mList.crend();
+        for (; it != itBegin; ++it) {
+            mList.push_back(*it);
+        }
+    } else if (mList.front() == path.mList.front()) {
+        auto it = ++(path.mList.cbegin());
+        const auto itEnd = path.mList.cend();
+        for (; it != itEnd; ++it) {
+            mList.push_front(*it);
         }
     } else {
         auto it = ++(path.mList.crbegin());
         const auto itBegin = path.mList.crend();
         for (; it != itBegin; ++it) {
-            mList.push_back(*it);
+            mList.push_front(*it);
         }
     }
     return *this;

@@ -2,13 +2,13 @@
 #define UNDIRECTED_GRAPH_HAS_BEEN_INCLUDED
 
 #include <algorithm>
+#include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
-#include <iostream>
 
 namespace vspc
 {
@@ -64,6 +64,10 @@ public:
     size_t numNodes() const { return mConnectivity.size(); }
     /// @return Number of edges in the graph.
     size_t numEdges() const { return mNumEdges; }
+    /// @return Smallest node index.
+    NodeType minNode() const { return mConnectivity.cbegin()->first; }
+    /// @return Largest node index.
+    NodeType maxNode() const { return mConnectivity.crbegin()->first; }
 
     /// @return Human-readable information about this undirected graph.
     std::string str() const;
