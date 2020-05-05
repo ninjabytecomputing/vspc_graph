@@ -91,8 +91,23 @@ private:
     void _constructSSSR();
     void _convertNodeIndices();
 
+    /// @{
+    /// @details These are methods used for debugging. Before the SSSR
+    /// algorithm is complete, the indices that are used by the
+    /// internal data structures might not match with the indices of
+    /// input graph. The reason for this is to ensure that our matrices
+    /// are only as large as they need to be, i.e. N x N, where N is
+    /// the number of nodes in the graph. This point is relevant
+    /// when the graph indices are not contiguous.
+    void            _replaceIndices(Path& p) const;
+    Path            _convertIndices(Path p) const;
+    void            _replaceIndices(UndirectedGraph& g) const;
+    UndirectedGraph _convertIndices(UndirectedGraph g) const;
+    /// @}
+
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
+    bool                                   mNeedConversion;
     const UndirectedGraph&                 mGraph;
     std::vector<NodeType>                  mNodeMap;
     UpperTriangularMatrix<float>           mDold, mDnew;
@@ -225,7 +240,8 @@ bool operator<(const SSSR::CandidateRing& lhs, const SSSR::CandidateRing& rhs)
 // -----------------------------------------------------------------------------
 
 SSSR::SSSR(const UndirectedGraph& graph)
-    : mGraph(graph)
+    : mNeedConversion(false)
+    , mGraph(graph)
     , mNodeMap(graph.numNodes())
     , mDold(graph.numNodes(), INFINITY)
     , mDnew(graph.numNodes(), INFINITY)
@@ -234,6 +250,18 @@ SSSR::SSSR(const UndirectedGraph& graph)
 {
     const std::set<NodeType> nodes = graph.getNodes();
     std::copy(nodes.cbegin(), nodes.cend(), mNodeMap.begin());
+
+    // Scan node indices to see a conversion is required later
+    bool contiguous = true;
+    for (size_t i = 0, n = nodes.size() - 1; i < n; ++i) {
+        if (mNodeMap[i+1] - mNodeMap[i] != 1) {
+            contiguous = false;
+            break;
+        }
+    }
+    if (mNodeMap[0] != 0 || !contiguous) {
+        mNeedConversion = true;
+    }
 
     for (size_t i = 0, n = nodes.size(); i < n; ++i) {
         for (NodeType jj : graph.getConnections(mNodeMap[i])) {
@@ -359,16 +387,15 @@ SSSR::_constructSSSR()
 #ifdef _DEBUG
             assert(candidate.getPtrPathPs());
 #endif
-            for (const Path& longPath : *candidate.getPtrPathPs()) {
-                const Path& shortPath = candidate.getPtrPaths()->front();
-                for (const Path& shortPath : *candidate.getPtrPaths()) {
+            for (const Path& lp : *candidate.getPtrPathPs()) {
+                for (const Path& sp : *candidate.getPtrPaths()) {
 
-                    UndirectedGraph g0 = constructGraph(longPath);
-                    UndirectedGraph g1 = constructGraph(shortPath);
+                    UndirectedGraph g0 = constructGraph(lp);
+                    UndirectedGraph g1 = constructGraph(sp);
                     g0 ^= g1;
 
                     // Edges overlapped, not a good candidate
-                    if (g0.numEdges() != longPath.length() + shortPath.length()) {
+                    if (g0.numEdges() != lp.length() + sp.length()) {
                         continue;
                     }
 
@@ -377,8 +404,8 @@ SSSR::_constructSSSR()
                         continue;
                     }
 
-                    NodeType a = *shortPath.cbegin();
-                    NodeType b = *(--shortPath.cend());
+                    NodeType a = *sp.cbegin();
+                    NodeType b = *(--sp.cend());
                     bool alreadyConnected = false;
                     if (a > b) std::swap(a, b);
                     for (const UndirectedGraph& ring : mSSSR) {
@@ -399,15 +426,15 @@ SSSR::_constructSSSR()
             for (auto itA = shortPaths.cbegin(); itA != itEnd; ++itA) {
                 auto itBInit = itA;
                 for (auto itB = ++itBInit; itB != itEnd; ++itB) {
-                    const Path& p1 = *itA;
-                    const Path& p2 = *itB;
+                    const Path& p = *itA;
+                    const Path& q = *itB;
 
-                    UndirectedGraph g0 = constructGraph(p1);
-                    UndirectedGraph g1 = constructGraph(p2);
+                    UndirectedGraph g0 = constructGraph(p);
+                    UndirectedGraph g1 = constructGraph(q);
                     g0 ^= g1;
 
                     // Edges overlapped, not a good candidate
-                    if (g0.numEdges() != p1.length() + p2.length()) {
+                    if (g0.numEdges() != p.length() + q.length()) {
                         continue;
                     }
 
@@ -416,8 +443,8 @@ SSSR::_constructSSSR()
                         continue;
                     }
 
-                    NodeType a = *p1.cbegin();
-                    NodeType b = *(--p1.cend());
+                    NodeType a = *p.cbegin();
+                    NodeType b = *(--p.cend());
                     bool alreadyConnected = false;
                     if (a > b) std::swap(a, b);
                     for (const UndirectedGraph& ring : mSSSR) {
@@ -439,6 +466,9 @@ SSSR::_constructSSSR()
 void
 SSSR::_convertNodeIndices()
 {
+    // Check for early out
+    if (!mNeedConversion) return;
+
     std::vector<UndirectedGraph> result(mSSSR.size());
     for (size_t i = 0, n = mSSSR.size(); i < n; ++i) {
         for (const auto& [node, conn] : mSSSR[i]) {
@@ -448,6 +478,40 @@ SSSR::_convertNodeIndices()
         }
     }
     mSSSR = result;
+}
+
+void
+SSSR::_replaceIndices(Path& p) const
+{
+    for (NodeType& n : p) {
+        n = mNodeMap[n];
+    }
+}
+
+SSSR::Path
+SSSR::_convertIndices(Path p) const
+{
+    _replaceIndices(p);
+    return p;
+}
+
+void
+SSSR::_replaceIndices(UndirectedGraph& g) const
+{
+    UndirectedGraph tmp;
+    for (const auto& [node, conn] : g) {
+        for (const NodeType c : conn) {
+            tmp.addEdge(mNodeMap[node], mNodeMap[c]);
+        }
+    }
+    g = tmp;
+}
+
+UndirectedGraph
+SSSR::_convertIndices(UndirectedGraph g) const
+{
+    _replaceIndices(g);
+    return g;
 }
 
 void
