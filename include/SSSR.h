@@ -4,8 +4,10 @@
 #include "UndirectedGraph.h"
 #include "UpperTriangularMatrix.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <iterator> // std::distance
 #include <list>
 #include <sstream>
 #include <string>
@@ -87,11 +89,13 @@ private:
     void _initializePID();
     void _makeCandidateSet();
     void _constructSSSR();
+    void _convertNodeIndices();
 
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
     const UndirectedGraph&                 mGraph;
     size_t                                 mNumSSSR;
+    std::vector<NodeType>                  mNodeMap;
     UpperTriangularMatrix<float>           mDold, mDnew;
     UpperTriangularMatrix<std::list<Path>> mP, mPp;
     std::list<CandidateSet>                mCandidates;
@@ -181,19 +185,23 @@ bool operator<(const SSSR::CandidateSet& lhs, const SSSR::CandidateSet& rhs)
 SSSR::SSSR(const UndirectedGraph& graph)
     : mGraph(graph)
     , mNumSSSR(graph.numEdges() - graph.numNodes() + 1)
-    , mDold(graph.maxNode() + 1, INFINITY)
-    , mDnew(graph.maxNode() + 1, INFINITY)
-    , mP(graph.maxNode() + 1)
-    , mPp(graph.maxNode() + 1)
+    , mNodeMap(graph.numNodes())
+    , mDold(graph.numNodes(), INFINITY)
+    , mDnew(graph.numNodes(), INFINITY)
+    , mP(graph.numNodes())
+    , mPp(graph.numNodes())
 {
     mSSSR.reserve(mNumSSSR);
 
     const std::set<NodeType> nodes = graph.getNodes();
-    for (NodeType i : nodes) {
-        for (NodeType j : graph.getConnections(i)) {
+    std::copy(nodes.cbegin(), nodes.cend(), mNodeMap.begin());
+
+    for (size_t i = 0, n = nodes.size(); i < n; ++i) {
+        for (NodeType jj : graph.getConnections(mNodeMap[i])) {
+            auto it = std::lower_bound(mNodeMap.cbegin(), mNodeMap.cend(), jj);
+            const size_t j = std::distance(mNodeMap.cbegin(), it);
             const size_t ij = mDold.index(i, j);
-            mDold(ij) = 1.f;
-            mDnew(ij) = 1.f;
+            mDold(ij) = mDnew(ij) = 1.f;
             mP(ij) = {Path(i, j)};
         }
     }
@@ -205,72 +213,49 @@ SSSR::run()
     _initializePID();
     _makeCandidateSet();
     _constructSSSR();
+    _convertNodeIndices();
     return mSSSR;
 }
 
 void
 SSSR::_initializePID()
 {
-    const std::set<NodeType> nodes = mGraph.getNodes();
-
-    // Note: lower_bound returns an iterator to the first element that is
-    // greater than or equal to the input. upper_bound returns an
-    // iterator to the first element that is greater than the input.
-
-    for (const size_t k : nodes) {
+    for (size_t k = 0, n = mNodeMap.size(); k < n; ++k) {
 
         // i < k
-        auto iIt    = nodes.cbegin();
-        auto iItEnd = nodes.lower_bound(k);  // equal to k
-
-        for (; iIt != iItEnd; ++iIt) {
-            const size_t ik = mDold.index(*iIt, k);
+        for (size_t i = 0; i < k; ++i) {
+            const size_t ik = mDold.index(i, k);
 
             // i < j < k
-            auto jIt    = nodes.upper_bound(*iIt);  // larger than i
-            auto jItEnd = nodes.lower_bound(k);     // equal to k
-
-            for (; jIt != jItEnd; ++jIt) {
-                const size_t ij = mDold.index(*iIt, *jIt);
-                const size_t kj = mDold.index(*jIt, k);
+            for (size_t j = i + 1; j < k; ++j) {
+                const size_t ij = mDold.index(i, j);
+                const size_t kj = mDold.index(j, k);
 
                 _process(ij, ik, kj);
             }
         }
 
         // i < k
-        iIt    = nodes.cbegin();
-        iItEnd = nodes.lower_bound(k);  // equal to k
-
-        for (; iIt != iItEnd; ++iIt) {
-            const size_t ik = mDold.index(*iIt, k);
+        for (size_t i = 0; i < k; ++i) {
+            const size_t ik = mDold.index(i, k);
 
             // k <= j
-            auto       jIt    = nodes.lower_bound(k);  // equal to k
-            const auto jItEnd = nodes.cend();
-
-            for (; jIt != jItEnd; ++jIt) {
-                const size_t ij = mDold.index(*iIt, *jIt);
-                const size_t kj = mDold.index(k, *jIt);
+            for (size_t j = k; j < n; ++j) {
+                const size_t ij = mDold.index(i, j);
+                const size_t kj = mDold.index(k, j);
 
                 _process(ij, ik, kj);
             }
         }
 
         // k <= i
-        iIt    = nodes.lower_bound(k); // equal to k
-        iItEnd = nodes.cend();
-
-        for (; iIt != iItEnd; ++iIt) {
-            const size_t ik = mDold.index(k, *iIt);
+        for (size_t i = k; i < n; ++i) {
+            const size_t ik = mDold.index(k, i);
 
             // i < j
-            auto       jIt    = nodes.upper_bound(*iIt);  // greater than i
-            const auto jItEnd = nodes.cend();
-
-            for (; jIt != jItEnd; ++jIt) {
-                const size_t ij = mDold.index(*iIt, *jIt);
-                const size_t kj = mDold.index(k, *jIt);
+            for (size_t j = i + 1; j < n; ++j) {
+                const size_t ij = mDold.index(i, j);
+                const size_t kj = mDold.index(k, j);
 
                 _process(ij, ik, kj);
             }
@@ -281,8 +266,8 @@ SSSR::_initializePID()
 
 #ifdef _VERBOSE
     std::cout << "Matrix P" << std::endl;
-    for (size_t i = 0; i < mP.dim(); ++i) {
-        for (size_t j = i; j < mP.dim(); ++j) {
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = i; j < n; ++j) {
             std::cout << "  (" << i << ", " << j << ") ::: " << mP(i, j).size() << "\n";
             for (const auto& path : mP(i, j)) {
                 std::cout << "    " << path << "\n";
@@ -291,8 +276,8 @@ SSSR::_initializePID()
         std::cout << "\n";
     }
     std::cout << "Matrix P'" << std::endl;
-    for (size_t i = 0; i < mPp.dim(); ++i) {
-        for (size_t j = i; j < mPp.dim(); ++j) {
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = i; j < n; ++j) {
             std::cout << "  (" << i << ", " << j << ") ::: " << mPp(i, j).size() << "\n";
             for (const auto& path : mPp(i, j)) {
                 std::cout << "    " << path << "\n";
@@ -308,15 +293,9 @@ SSSR::_initializePID()
 void
 SSSR::_makeCandidateSet()
 {
-    const std::set<NodeType> nodes = mGraph.getNodes();
-
-    for (const size_t i : nodes) {
-
-        auto       jIt    = nodes.upper_bound(i);  // greater than i
-        const auto jItEnd = nodes.cend();
-
-        for (; jIt != jItEnd; ++jIt) {
-            const size_t ij = mDnew.index(i, *jIt);
+    for (size_t i = 0, n = mNodeMap.size(); i < n; ++i) {
+        for (size_t j = i + 1; j < n; ++j) {
+            const size_t ij = mDnew.index(i, j);
 
             if (std::isinf(mDnew(ij)) || (mP(ij).size() == 1 && mPp(ij).empty())) {
                 continue;
@@ -413,6 +392,20 @@ SSSR::_constructSSSR()
             }
         }
     }
+}
+
+void
+SSSR::_convertNodeIndices()
+{
+    std::vector<UndirectedGraph> result(mSSSR.size());
+    for (size_t i = 0, n = mSSSR.size(); i < n; ++i) {
+        for (const auto& [node, conn] : mSSSR[i]) {
+            for (const NodeType c : conn) {
+                result[i].addEdge(mNodeMap[node], mNodeMap[c]);
+            }
+        }
+    }
+    mSSSR = result;
 }
 
 void

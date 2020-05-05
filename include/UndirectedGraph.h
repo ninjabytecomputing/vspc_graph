@@ -69,7 +69,7 @@ public:
     std::string str() const;
 
 private:
-    size_t                       mNumEdges;
+    size_t                                 mNumEdges;
     std::map<NodeType, std::set<NodeType>> mConnectivity;
 };
 
