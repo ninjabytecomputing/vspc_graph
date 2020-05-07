@@ -1,6 +1,7 @@
 *.o
 *.exe
 .sconsign.dblite
-*.txt
 *.csv
-build
+debug
+release
+
