@@ -92,13 +92,15 @@ private:
     void _convertNodeIndices();
 
     /// @{
-    /// @details These are methods used for debugging. Before the SSSR
-    /// algorithm is complete, the indices that are used by the
-    /// internal data structures might not match with the indices of
-    /// input graph. The reason for this is to ensure that our matrices
-    /// are only as large as they need to be, i.e. N x N, where N is
-    /// the number of nodes in the graph. This point is relevant
-    /// when the graph indices are not contiguous.
+    /// @details These are methods used for primarily used for debugging, e.g.
+    /// printing out the true indices of paths/graphs that the SSSR algorithm
+    /// found. Before the SSSR algorithm is complete, the indices that are used
+    /// by the internal data structures won't match the indices of the input
+    /// graph if (1) the indexing did not start with 0, and (2) the indices
+    /// are not contiguous. To ensure the most compact data structures for this
+    /// algorithm, we first perform a "transformation" on the indices so they
+    /// start with 0 and are contiguous. Then, the final step of the algorithm
+    /// will convert the indexing back to that of the input graph.
     void            _replaceIndices(Path& p) const;
     Path            _convertIndices(Path p) const;
     void            _replaceIndices(UndirectedGraph& g) const;
