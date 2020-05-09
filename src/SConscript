@@ -1,3 +1,0 @@
-Import('env')
-env.Program('main', 'main.cpp')
-env.Program('tests', 'tests.cpp')
