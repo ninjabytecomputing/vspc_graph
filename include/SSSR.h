@@ -411,7 +411,7 @@ SSSR::_constructSSSR()
                     bool alreadyConnected = false;
                     if (a > b) std::swap(a, b);
                     for (const UndirectedGraph& ring : mSSSR) {
-                        if (ring.hasNode(a) && ring.hasNode(b)) {
+                        if (g0 == ring) {
                             alreadyConnected = true;
                             break;
                         }
@@ -423,9 +423,9 @@ SSSR::_constructSSSR()
                 }
             }
         } else {
-            const std::list<Path>& shortPaths = *candidate.getPtrPaths();
-            const auto itEnd = shortPaths.cend();
-            for (auto itA = shortPaths.cbegin(); itA != itEnd; ++itA) {
+            const std::list<Path>& paths = *candidate.getPtrPaths();
+            const auto itEnd = paths.cend();
+            for (auto itA = paths.cbegin(); itA != itEnd; ++itA) {
                 auto itBInit = itA;
                 for (auto itB = ++itBInit; itB != itEnd; ++itB) {
                     const Path& p = *itA;
@@ -450,7 +450,7 @@ SSSR::_constructSSSR()
                     bool alreadyConnected = false;
                     if (a > b) std::swap(a, b);
                     for (const UndirectedGraph& ring : mSSSR) {
-                        if (ring.hasNode(a) && ring.hasNode(b)) {
+                        if (g0 == ring) {
                             alreadyConnected = true;
                             break;
                         }

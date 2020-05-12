@@ -70,6 +70,9 @@ public:
     /// @return Human-readable information about this undirected graph.
     std::string str() const;
 
+    friend bool operator==(const UndirectedGraph& lhs,
+                           const UndirectedGraph& rhs);
+
 private:
     size_t                                 mNumEdges;
     std::map<NodeType, std::set<NodeType>> mConnectivity;
@@ -78,6 +81,8 @@ private:
 // -----------------------------------------------------------------------------
 
 UndirectedGraph operator^(UndirectedGraph lhs, const UndirectedGraph& rhs);
+
+bool operator==(const UndirectedGraph& lhs, const UndirectedGraph& rhs);
 
 std::ostream& operator<<(std::ostream& os, const UndirectedGraph& obj);
 
@@ -340,6 +345,12 @@ UndirectedGraph
 operator^(UndirectedGraph lhs, const UndirectedGraph& rhs)
 {
     return lhs ^= rhs;
+}
+
+bool
+operator==(const UndirectedGraph& lhs, const UndirectedGraph& rhs)
+{
+    return lhs.mConnectivity == rhs.mConnectivity;
 }
 
 std::ostream&
