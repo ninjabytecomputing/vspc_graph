@@ -48,9 +48,9 @@ int main(int argc, char* argv[]) {
     // Construct SSSR object
     vspc::SSSR op(graph);
 
-    std::cout << "+------------------------------------------------------+\n";
-    std::cout << "|                      Input data                      |\n";
-    std::cout << "+------------------------------------------------------+\n";
+    std::cout << "+------------------------------------------------------------------+\n";
+    std::cout << "|                            Input data                            |\n";
+    std::cout << "+------------------------------------------------------------------+\n";
     std::cout << "  Input file       : " << inputName << "\n";
     std::cout << "  Number of nodes  : " << graph.numNodes() << "\n";
     std::cout << "  Node index range : "
@@ -60,9 +60,9 @@ int main(int argc, char* argv[]) {
     // Find SSSR and return the vector of cycles
     const auto& cycles = op.run();
 
-    std::cout << "+------------------------------------------------------+\n";
-    std::cout << "|                        Results                       |\n";
-    std::cout << "+------------------------------------------------------+\n";
+    std::cout << "+------------------------------------------------------------------+\n";
+    std::cout << "|                              Results                             |\n";
+    std::cout << "+------------------------------------------------------------------+\n";
     std::cout << "  Ouptut file      : " << outputName << "\n";
     std::cout << "  Number of cycles : " << cycles.size() << "\n";
 
