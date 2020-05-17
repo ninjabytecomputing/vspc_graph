@@ -383,10 +383,10 @@ SSSR::_makeCandidateRing()
             if (std::isinf(mDnew(ij)) || (mP(ij).size() == 1 && mPp(ij).empty())) {
                 continue;
             } else {
-                if (!mPp(ij).empty()) {
-                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
-                } else {
+                if (mP(ij).size() > 1) {
                     mCandidates.emplace_back(2 * mDnew(ij), mP(ij));
+                } else {
+                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
                 }
             }
         }
@@ -410,9 +410,12 @@ SSSR::_constructSSSR()
         if (g.numNodes() != g.numEdges()) { return false; }
 
         // Check if we've already generated this cycle by simply checking
-        // for equality against what's already generated.
+        // for equality against what's already generated. We only need to
+        // check against the rings that have the same number of edges.
         for (const UndirectedGraph& ring : mSSSR) {
-            if (g == ring) { return false; }
+            if (ring.numEdges() == g.numEdges()) {
+                if (g == ring) { return false; }
+            }
         }
         return true;
     };
@@ -421,20 +424,25 @@ SSSR::_constructSSSR()
         if (candidate.length() % 2 == 1) {
 #ifdef _DEBUG
             assert(candidate.getPtrPathPs());
+            assert(candidate.getPtrPaths());
+            assert(candidate.getPtrPaths()->size() == 1);
 #endif
+            // Only one short path
+            const Path& sp           = candidate.getPtrPaths()->front();
+            const UndirectedGraph g1 = constructGraph(sp);
+
             for (const Path& lp : *candidate.getPtrPathPs()) {
-                for (const Path& sp : *candidate.getPtrPaths()) {
+                UndirectedGraph g = constructGraph(lp);
+                g ^= g1;
 
-                    UndirectedGraph g0 = constructGraph(lp);
-                    UndirectedGraph g1 = constructGraph(sp);
-                    g0 ^= g1;
-
-                    if (checkCycle(g0, lp, sp)) {
-                        mSSSR.push_back(g0);
-                    }
+                if (checkCycle(g, lp, sp)) {
+                    mSSSR.push_back(g);
                 }
             }
         } else {
+#ifdef _DEBUG
+            assert(candidate.getPtrPaths());
+#endif
             const std::list<Path>& paths = *candidate.getPtrPaths();
             const auto itEnd = paths.cend();
             for (auto itA = paths.cbegin(); itA != itEnd; ++itA) {
