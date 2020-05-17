@@ -50,6 +50,7 @@ public:
         size_t length() const { return mList.size() - 1; }
 
         std::string str() const;
+        std::string strAsCSV() const;
 
     private:
         std::list<NodeType> mList;
@@ -202,6 +203,19 @@ SSSR::Path::str() const
     const auto itEnd = --(mList.cend());
     for (; it != itEnd; ++it) {
         os << *it << " -> ";
+    }
+    os << *it;
+    return os.str();
+}
+
+std::string
+SSSR::Path::strAsCSV() const
+{
+    std::ostringstream os;
+    auto it = mList.cbegin();
+    const auto itEnd = --(mList.cend());
+    for (; it != itEnd; ++it) {
+        os << *it << ",";
     }
     os << *it;
     return os.str();

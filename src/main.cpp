@@ -12,12 +12,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    std::string inputName(argv[1]);
     std::vector<vspc::UndirectedGraph::Edge> edgeData;
 
     {
-        std::ifstream fin(argv[1]);
+        std::ifstream fin(inputName);
         if (fin.fail()) {
-            std::cerr << "Invalid filename\n";
+            std::cerr << "Invalid filename: " << inputName << "\n";
         }
 
         vspc::CSVIterator iter(fin);
@@ -31,6 +32,17 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Generate output filename
+    const size_t lastPeriod = inputName.find_last_of('.');
+    std::string outputName;
+    if (lastPeriod != inputName.length()-4) {
+        std::cout << "Warning: input filename did not have the expected .csv extension\n";
+        outputName = inputName + "_cycles.csv";
+    } else {
+        outputName = inputName;
+        outputName.insert(outputName.length()-4, "_cycles");
+    }
+
     // Construct graph object
     vspc::UndirectedGraph graph(edgeData);
     // Construct SSSR object
@@ -39,26 +51,32 @@ int main(int argc, char* argv[]) {
     std::cout << "+------------------------------------------------------+\n";
     std::cout << "|                      Input data                      |\n";
     std::cout << "+------------------------------------------------------+\n";
-    std::cout << "  File: " << argv[1] << "\n";
-    std::cout << "    Number of nodes : " << graph.numNodes() << "\n";
-    std::cout << "    Node index range: "
+    std::cout << "  Input file       : " << inputName << "\n";
+    std::cout << "  Number of nodes  : " << graph.numNodes() << "\n";
+    std::cout << "  Node index range : "
               << "[" << graph.minNode() << ", " << graph.maxNode() << "]\n";
-    std::cout << "    Number of edge  : " << graph.numEdges() << "\n\n";
+    std::cout << "  Number of edges  : " << graph.numEdges() << "\n\n";
 
+    // Find SSSR and return the vector of cycles
     const auto& cycles = op.run();
 
     std::cout << "+------------------------------------------------------+\n";
     std::cout << "|                        Results                       |\n";
     std::cout << "+------------------------------------------------------+\n";
-    std::cout << "  Found " << cycles.size() << " cycles\n";
+    std::cout << "  Ouptut file      : " << outputName << "\n";
+    std::cout << "  Number of cycles : " << cycles.size() << "\n";
 
-    for (size_t i = 0, n = cycles.size(); i < n; ++i) {
-        // Sanity check!
-        if (cycles[i].numEdges() != cycles[i].numNodes()) {
-            std::cout << "Cycle " << i << " failed the sanity check\n";
-            std::cout << cycles[i] << std::endl;
-        } else {
-            std::cout << convertGraphToPath(cycles[i]) << "\n";
+    {
+        // TODO Check if file already exists
+        std::ofstream fout(outputName);
+
+        for (size_t i = 0, n = cycles.size(); i < n; ++i) {
+            // Sanity check!
+            if (cycles[i].numEdges() != cycles[i].numNodes()) {
+                std::cout << "Cycle " << i << " failed the sanity check - skipping\n";
+            } else {
+                fout << convertGraphToPath(cycles[i]).strAsCSV() << "\n";
+            }
         }
     }
 }
