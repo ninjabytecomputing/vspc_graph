@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
         std::ifstream fin(inputName);
         if (fin.fail()) {
             std::cerr << "Invalid filename: " << inputName << "\n";
+            return 1;
         }
 
         vspc::CSVIterator iter(fin);
@@ -41,6 +42,31 @@ int main(int argc, char* argv[]) {
     } else {
         outputName = inputName;
         outputName.insert(outputName.length()-4, "_cycles");
+    }
+
+    {
+        std::ifstream fCheck(outputName);
+        if (fCheck.good()) {
+            std::string in;
+            std::cout << "Warning: output file already exists. Overwrite [y/n]? ";
+            while (std::cin >> in) {
+                if (in.length() != 1) {
+                    in.clear();
+                    std::cout << "Unrecognized response. Overwrite [y/n]? ";
+                    continue;
+                }
+                if (in == "Y" || in == "y") {
+                    break;
+                } else if (in == "N" || in == "n") {
+                    std::cout << "Please specify an output filename: ";
+                    std::cin >> outputName;
+                    break;
+                } else {
+                    in.clear();
+                    std::cout << "Unrecognized response. Overwrite [y/n]? ";
+                }
+            }
+        }
     }
 
     // Construct graph object
