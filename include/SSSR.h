@@ -384,6 +384,25 @@ SSSR::_makeCandidateRing()
 void
 SSSR::_constructSSSR()
 {
+    // Functor used to check whether the newly generated graph is a cycle that
+    // should be inserted in our SSSR, returning true if so.
+    auto checkCycle = [this](const UndirectedGraph& g,
+                             const Path& p1,
+                             const Path& p2)
+    {
+        // Edges overlapped, not a good candidate
+        if (g.numEdges() != p1.length() + p2.length()) { return false; }
+        // Nodes overlapped, not a good candidate
+        if (g.numNodes() != g.numEdges()) { return false; }
+
+        // Check if we've already generated this cycle by simply checking
+        // for equality against what's already generated.
+        for (const UndirectedGraph& ring : mSSSR) {
+            if (g == ring) { return false; }
+        }
+        return true;
+    };
+
     for (const CandidateRing& candidate : mCandidates) {
         if (candidate.length() % 2 == 1) {
 #ifdef _DEBUG
@@ -396,28 +415,7 @@ SSSR::_constructSSSR()
                     UndirectedGraph g1 = constructGraph(sp);
                     g0 ^= g1;
 
-                    // Edges overlapped, not a good candidate
-                    if (g0.numEdges() != lp.length() + sp.length()) {
-                        continue;
-                    }
-
-                    // Nodes overlapped, not a good candidate
-                    if (g0.numNodes() != g0.numEdges()) {
-                        continue;
-                    }
-
-                    NodeType a = *sp.cbegin();
-                    NodeType b = *(--sp.cend());
-                    bool alreadyConnected = false;
-                    if (a > b) std::swap(a, b);
-                    for (const UndirectedGraph& ring : mSSSR) {
-                        if (g0 == ring) {
-                            alreadyConnected = true;
-                            break;
-                        }
-                    }
-
-                    if (!alreadyConnected) {
+                    if (checkCycle(g0, lp, sp)) {
                         mSSSR.push_back(g0);
                     }
                 }
@@ -435,28 +433,7 @@ SSSR::_constructSSSR()
                     UndirectedGraph g1 = constructGraph(q);
                     g0 ^= g1;
 
-                    // Edges overlapped, not a good candidate
-                    if (g0.numEdges() != p.length() + q.length()) {
-                        continue;
-                    }
-
-                    // Nodes overlapped, not a good candidate
-                    if (g0.numNodes() != g0.numEdges()) {
-                        continue;
-                    }
-
-                    NodeType a = *p.cbegin();
-                    NodeType b = *(--p.cend());
-                    bool alreadyConnected = false;
-                    if (a > b) std::swap(a, b);
-                    for (const UndirectedGraph& ring : mSSSR) {
-                        if (g0 == ring) {
-                            alreadyConnected = true;
-                            break;
-                        }
-                    }
-
-                    if (!alreadyConnected) {
+                    if (checkCycle(g0, p, q)) {
                         mSSSR.push_back(g0);
                     }
                 }
