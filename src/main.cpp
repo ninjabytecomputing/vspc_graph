@@ -7,12 +7,13 @@
 
 int main(int argc, char* argv[]) {
 
-    if (argc == 1) {
-        std::cerr << "Need to specify a csv file containing graph data\n";
+    if (argc != 3) {
+        std::cerr << "Need both input and output csv files\n";
         return 1;
     }
 
     std::string inputName(argv[1]);
+    std::string outputName(argv[2]);
     std::vector<vspc::UndirectedGraph::Edge> edgeData;
 
     {
@@ -30,42 +31,6 @@ int main(int argc, char* argv[]) {
         for (; iter; ++iter) {
             const vspc::CSVRow& edge = *iter;
             edgeData.emplace_back(std::stoi(edge[0]), std::stoi(edge[1]));
-        }
-    }
-
-    // Generate output filename
-    const size_t lastPeriod = inputName.find_last_of('.');
-    std::string outputName;
-    if (lastPeriod != inputName.length()-4) {
-        std::cout << "Warning: input filename did not have the expected .csv extension\n";
-        outputName = inputName + "_cycles.csv";
-    } else {
-        outputName = inputName;
-        outputName.insert(outputName.length()-4, "_cycles");
-    }
-
-    {
-        std::ifstream fCheck(outputName);
-        if (fCheck.good()) {
-            std::string in;
-            std::cout << "Warning: output file already exists. Overwrite [y/n]? ";
-            while (std::cin >> in) {
-                if (in.length() != 1) {
-                    in.clear();
-                    std::cout << "Unrecognized response. Overwrite [y/n]? ";
-                    continue;
-                }
-                if (in == "Y" || in == "y") {
-                    break;
-                } else if (in == "N" || in == "n") {
-                    std::cout << "Please specify an output filename: ";
-                    std::cin >> outputName;
-                    break;
-                } else {
-                    in.clear();
-                    std::cout << "Unrecognized response. Overwrite [y/n]? ";
-                }
-            }
         }
     }
 
@@ -93,7 +58,6 @@ int main(int argc, char* argv[]) {
     std::cout << "  Number of cycles : " << cycles.size() << "\n";
 
     {
-        // TODO Check if file already exists
         std::ofstream fout(outputName);
 
         for (size_t i = 0, n = cycles.size(); i < n; ++i) {
