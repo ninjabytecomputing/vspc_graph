@@ -5,37 +5,52 @@ import shlex
 import subprocess
 import sys
 
+EXE = './release/src/main'
 
-EXECUTABLE = './release/src/main'
 
 def main(files):
-    # Filter out any files with '_cycles' as a substring in the filename
-    files = [f for f in files if '_cycles' not in f]
+    # Filter out any files with 'cycle' as a substring in the base filename
+    files = [f for f in files if 'cycle' not in os.path.basename(f)]
 
-    skippedFiles = [];
-    fileMap = {};
+    notCSVFiles      = []
+    dneFiles         = []
+    notGraphFiles    = []
+    noOverwriteFiles = []
+    fileMap          = {}
 
     for f in files:
-        if not f.endswith('csv'):
-            skippedFiles.append(f);
+        if not f.endswith('.csv'):
+            notCSVFiles.append(f);
         else:
             if not os.path.exists(f):
-                print(f + " doesn't exist - skipping")
+                dneFiles.append(f)
             else:
-                outFile = f[:-4] + '_cycles.csv'
-                if os.path.exists(outFile):
-                    resp = input(outFile + " already exists. Overwrite [y/n]? ")
-                    if resp == 'y' or resp == 'Y':
-                        fileMap[f] = outFile
+                bname = os.path.basename(f)
+                if bname.find('graph') == -1:
+                    notGraphFiles.append(f)
                 else:
-                    fileMap[f] = outFile
+                    outFile = os.path.dirname(f) + '/'
+                    outFile += bname.replace('graph', 'cycle')
+                    if os.path.exists(outFile):
+                        resp = input(outFile + " already exists. Overwrite [y/n]? ")
+                        if resp == 'y' or resp == 'Y':
+                            fileMap[f] = outFile
+                        else:
+                            noOverwriteFiles.append(f)
+                    else:
+                        fileMap[f] = outFile
 
     print('+-----------------------------------------------------------+')
     print('|                          Results                          |')
     print('+-----------------------------------------------------------+')
     for inF, outF in fileMap.items():
-        cmd = ' '.join([EXECUTABLE, inF, outF])
-        subprocess.check_call(shlex.split(cmd))
+        cmd = ' '.join([EXE, inF, outF])
+        # subprocess.check_call(shlex.split(cmd))
+
+    print('+-----------------------------------------------------------+')
+    print('|                          Skipped                          |')
+    print('+-----------------------------------------------------------+')
+    # Print the skipped files nicely
 
 
 if __name__ == '__main__':
