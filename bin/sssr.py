@@ -27,7 +27,12 @@ def main(files):
                     resp = input(outFile + " already exists. Overwrite [y/n]? ")
                     if resp == 'y' or resp == 'Y':
                         fileMap[f] = outFile
+                else:
+                    fileMap[f] = outFile
 
+    print('+-----------------------------------------------------------+')
+    print('|                          Results                          |')
+    print('+-----------------------------------------------------------+')
     for inF, outF in fileMap.items():
         cmd = ' '.join([EXECUTABLE, inF, outF])
         subprocess.check_call(shlex.split(cmd))
