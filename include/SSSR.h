@@ -47,22 +47,23 @@ public:
         const_iterator end()  const { return mList.end(); }
         const_iterator cend() const { return mList.cend(); }
 
-        size_t length() const { return mList.size(); }
+        size_t length() const { return mList.size() - 1; }
 
         std::string str() const;
+        std::string strAsCSV() const;
 
     private:
         std::list<NodeType> mList;
     };
 
-    class CandidateSet
+    class CandidateRing
     {
     public:
-        CandidateSet(const size_t length,
+        CandidateRing(const size_t length,
                      const std::list<Path>& p)
             : mLength(length), mPath(&p), mPathP(nullptr) {}
 
-        CandidateSet(const size_t length,
+        CandidateRing(const size_t length,
                      const std::list<Path>& p,
                      const std::list<Path>& pp)
             : mLength(length), mPath(&p), mPathP(&pp) {}
@@ -71,7 +72,7 @@ public:
         std::list<Path> const * const getPtrPaths() const { return mPath; }
         std::list<Path> const * const getPtrPathPs() const { return mPathP; }
 
-        friend bool operator<(const CandidateSet& lhs, const CandidateSet& rhs);
+        friend bool operator<(const CandidateRing& lhs, const CandidateRing& rhs);
 
     private:
         const size_t mLength;
@@ -87,49 +88,108 @@ public:
 
 private:
     void _initializePID();
-    void _makeCandidateSet();
+    void _makeCandidateRing();
     void _constructSSSR();
     void _convertNodeIndices();
 
+    /// @{
+    /// @details These are methods used for primarily used for debugging, e.g.
+    /// printing out the true indices of paths/graphs that the SSSR algorithm
+    /// found. Before the SSSR algorithm is complete, the indices that are used
+    /// by the internal data structures won't match the indices of the input
+    /// graph if (1) the indexing did not start with 0, and (2) the indices
+    /// are not contiguous. To ensure the most compact data structures for this
+    /// algorithm, we first perform a "transformation" on the indices so they
+    /// start with 0 and are contiguous. Then, the final step of the algorithm
+    /// will convert the indexing back to that of the input graph.
+    void            _replaceIndices(Path& p) const;
+    Path            _convertIndices(Path p) const;
+    void            _replaceIndices(UndirectedGraph& g) const;
+    UndirectedGraph _convertIndices(UndirectedGraph g) const;
+    /// @}
+
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
+    bool                                   mNeedConversion;
     const UndirectedGraph&                 mGraph;
-    size_t                                 mNumSSSR;
     std::vector<NodeType>                  mNodeMap;
     UpperTriangularMatrix<float>           mDold, mDnew;
     UpperTriangularMatrix<std::list<Path>> mP, mPp;
-    std::list<CandidateSet>                mCandidates;
+    std::list<CandidateRing>               mCandidates;
     std::vector<UndirectedGraph>           mSSSR;
 };
+
+
+vspc::SSSR::Path convertGraphToPath(vspc::UndirectedGraph graph)
+{
+    using NodeType = vspc::UndirectedGraph::NodeType;
+    using Path     = vspc::SSSR::Path;
+
+    const NodeType startNode = graph.minNode();
+    NodeType node = startNode;
+    std::set<NodeType> conn = graph.getConnections(node);
+
+    Path path(node, *conn.cbegin());
+    graph.removeNode(node);
+    node = *conn.cbegin();
+
+    while (graph.prune().numNodes() != 0) {
+        conn = graph.getConnections(node);
+        if (conn.empty()) {
+            for (auto&& [n, c] : graph) {
+                const auto it = c.find(node);
+                if (it != c.end()) {
+                    path.append(Path({node, n}));
+                    graph.removeNode(node);
+                    node = n;
+                    break;
+                }
+            }
+        } else {
+            path.append(Path{node, *conn.cbegin()});
+            graph.removeNode(node);
+            node = *conn.cbegin();
+        }
+    }
+
+    // Append the last path to make it a full cycle
+    path.append(Path{*(--path.cend()), startNode});
+    return path;
+}
 
 // -----------------------------------------------------------------------------
 
 SSSR::Path&
 SSSR::Path::append(const Path& path)
 {
-    if (mList.front() == path.mList.front()) {
-        auto it = ++(path.mList.cbegin());
-        const auto itEnd = path.mList.cend();
-        for (; it != itEnd; ++it) {
-            mList.push_front(*it);
-        }
-    } else if (mList.front() == path.mList.back()) {
-        auto it = ++(path.mList.crbegin());
-        const auto itBegin = path.mList.crend();
-        for (; it != itBegin; ++it) {
-            mList.push_front(*it);
-        }
-    } else if (mList.back() == path.mList.front()) {
+    if (mList.empty()) {
+        mList = path.mList;
+        return *this;
+    }
+
+    if (mList.back() == path.mList.front()) {
         auto it = ++(path.mList.cbegin());
         const auto itEnd = path.mList.cend();
         for (; it != itEnd; ++it) {
             mList.push_back(*it);
+        }
+    } else if (mList.back() == path.mList.back()) {
+        auto it = ++(path.mList.crbegin());
+        const auto itBegin = path.mList.crend();
+        for (; it != itBegin; ++it) {
+            mList.push_back(*it);
+        }
+    } else if (mList.front() == path.mList.front()) {
+        auto it = ++(path.mList.cbegin());
+        const auto itEnd = path.mList.cend();
+        for (; it != itEnd; ++it) {
+            mList.push_front(*it);
         }
     } else {
         auto it = ++(path.mList.crbegin());
         const auto itBegin = path.mList.crend();
         for (; it != itBegin; ++it) {
-            mList.push_back(*it);
+            mList.push_front(*it);
         }
     }
     return *this;
@@ -143,6 +203,19 @@ SSSR::Path::str() const
     const auto itEnd = --(mList.cend());
     for (; it != itEnd; ++it) {
         os << *it << " -> ";
+    }
+    os << *it;
+    return os.str();
+}
+
+std::string
+SSSR::Path::strAsCSV() const
+{
+    std::ostringstream os;
+    auto it = mList.cbegin();
+    const auto itEnd = --(mList.cend());
+    for (; it != itEnd; ++it) {
+        os << *it << ",";
     }
     os << *it;
     return os.str();
@@ -175,7 +248,7 @@ operator<<(std::ostream& os, const SSSR::Path& obj)
 
 // -----------------------------------------------------------------------------
 
-bool operator<(const SSSR::CandidateSet& lhs, const SSSR::CandidateSet& rhs)
+bool operator<(const SSSR::CandidateRing& lhs, const SSSR::CandidateRing& rhs)
 {
     return lhs.mLength < rhs.mLength;
 }
@@ -183,18 +256,28 @@ bool operator<(const SSSR::CandidateSet& lhs, const SSSR::CandidateSet& rhs)
 // -----------------------------------------------------------------------------
 
 SSSR::SSSR(const UndirectedGraph& graph)
-    : mGraph(graph)
-    , mNumSSSR(graph.numEdges() - graph.numNodes() + 1)
+    : mNeedConversion(false)
+    , mGraph(graph)
     , mNodeMap(graph.numNodes())
     , mDold(graph.numNodes(), INFINITY)
     , mDnew(graph.numNodes(), INFINITY)
     , mP(graph.numNodes())
     , mPp(graph.numNodes())
 {
-    mSSSR.reserve(mNumSSSR);
-
     const std::set<NodeType> nodes = graph.getNodes();
     std::copy(nodes.cbegin(), nodes.cend(), mNodeMap.begin());
+
+    // Scan node indices to see a conversion is required later
+    bool contiguous = true;
+    for (size_t i = 0, n = nodes.size() - 1; i < n; ++i) {
+        if (mNodeMap[i+1] - mNodeMap[i] != 1) {
+            contiguous = false;
+            break;
+        }
+    }
+    if (mNodeMap[0] != 0 || !contiguous) {
+        mNeedConversion = true;
+    }
 
     for (size_t i = 0, n = nodes.size(); i < n; ++i) {
         for (NodeType jj : graph.getConnections(mNodeMap[i])) {
@@ -211,7 +294,7 @@ const std::vector<UndirectedGraph>&
 SSSR::run()
 {
     _initializePID();
-    _makeCandidateSet();
+    _makeCandidateRing();
     _constructSSSR();
     _convertNodeIndices();
     return mSSSR;
@@ -291,7 +374,7 @@ SSSR::_initializePID()
 }
 
 void
-SSSR::_makeCandidateSet()
+SSSR::_makeCandidateRing()
 {
     for (size_t i = 0, n = mNodeMap.size(); i < n; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
@@ -300,10 +383,10 @@ SSSR::_makeCandidateSet()
             if (std::isinf(mDnew(ij)) || (mP(ij).size() == 1 && mPp(ij).empty())) {
                 continue;
             } else {
-                if (!mPp(ij).empty()) {
-                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
-                } else {
+                if (mP(ij).size() > 1) {
                     mCandidates.emplace_back(2 * mDnew(ij), mP(ij));
+                } else {
+                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
                 }
             }
         }
@@ -315,80 +398,67 @@ SSSR::_makeCandidateSet()
 void
 SSSR::_constructSSSR()
 {
-    // Functor for trimming overlaps with already-constructed cycles
-    // via the XOR operation.
-    auto trimOverlap = [this](UndirectedGraph& graph)
+    // Functor used to check whether the newly generated graph is a cycle that
+    // should be inserted in our SSSR, returning true if so.
+    auto checkCycle = [this](const UndirectedGraph& g,
+                             const Path& p1,
+                             const Path& p2)
     {
-        for (const UndirectedGraph& cycle : mSSSR) {
-            // Note: We need to "refresh" this iterator every iteration
-            // because the XOR from the previous iteration might have
-            // removed the node and its connections.
-            const auto               gIt   = graph.cbegin();
-            const NodeType           gNode = gIt->first;
-            const std::set<NodeType> gConn = gIt->second;
+        // Edges overlapped, not a good candidate
+        if (g.numEdges() != p1.length() + p2.length()) { return false; }
+        // Nodes overlapped, not a good candidate
+        if (g.numNodes() != g.numEdges()) { return false; }
 
-            // Get the connections of the node index of the current cycle.
-            const std::set<NodeType> otherConn = cycle.getConnections(gNode);
-
-            // Nothing to see here - move on.
-            if (otherConn.empty()) continue;
-
-            // If the sets of connections match, then the cycle we just
-            // constructed contains a cycle in our SSSR set. Perform XOR
-            // to remove the overlapping portion.
-            if (gConn == otherConn) {
-                graph ^= cycle;
+        // Check if we've already generated this cycle by simply checking
+        // for equality against what's already generated. We only need to
+        // check against the rings that have the same number of edges.
+        for (const UndirectedGraph& ring : mSSSR) {
+            if (ring.numEdges() == g.numEdges()) {
+                if (g == ring) { return false; }
             }
         }
+        return true;
     };
 
-    for (const CandidateSet& candidate : mCandidates) {
+    for (const CandidateRing& candidate : mCandidates) {
         if (candidate.length() % 2 == 1) {
 #ifdef _DEBUG
             assert(candidate.getPtrPathPs());
+            assert(candidate.getPtrPaths());
+            assert(candidate.getPtrPaths()->size() == 1);
 #endif
-            for (const Path& longPath : *candidate.getPtrPathPs()) {
-                const Path& shortPath = candidate.getPtrPaths()->front();
+            // Only one short path
+            const Path& sp           = candidate.getPtrPaths()->front();
+            const UndirectedGraph g1 = constructGraph(sp);
 
-                UndirectedGraph candidate = constructGraph(merge(shortPath, longPath));
+            for (const Path& lp : *candidate.getPtrPathPs()) {
+                UndirectedGraph g = constructGraph(lp);
+                g ^= g1;
 
-                // Use XOR to trim away cycles from the newly generated cycle that
-                // overlap with cycles in our SSSR set.
-                trimOverlap(candidate);
-
-                // At this point, the new candidate is either a brand new cycle
-                // (which will be inserted into our SSSR set) or an empty graph.
-                if (candidate.numEdges() != 0) {
-                    mSSSR.push_back(candidate);
+                if (checkCycle(g, lp, sp)) {
+                    mSSSR.push_back(g);
                 }
-
-                // Early exit if all the correct number of cycles has been found.
-                if (mSSSR.size() == mNumSSSR) return;
             }
         } else {
-            const std::list<Path>& shortPaths = *candidate.getPtrPaths();
-            auto it = shortPaths.cbegin();
-            const auto itEnd = --(shortPaths.cend());
+#ifdef _DEBUG
+            assert(candidate.getPtrPaths());
+#endif
+            const std::list<Path>& paths = *candidate.getPtrPaths();
+            const auto itEnd = paths.cend();
+            for (auto itA = paths.cbegin(); itA != itEnd; ++itA) {
+                auto itBInit = itA;
+                for (auto itB = ++itBInit; itB != itEnd; ++itB) {
+                    const Path& p = *itA;
+                    const Path& q = *itB;
 
-            while (it != itEnd) {
-                // Why can't I just pass the iterators into merge?!
-                const Path& p1 = *it;
-                const Path& p2 = *(++it);
+                    UndirectedGraph g0 = constructGraph(p);
+                    UndirectedGraph g1 = constructGraph(q);
+                    g0 ^= g1;
 
-                UndirectedGraph candidate = constructGraph(merge(p1, p2));
-
-                // Use XOR to trim away cycles from the newly generated cycle that
-                // overlap with cycles in our SSSR set.
-                trimOverlap(candidate);
-
-                // At this point, the new candidate is either a brand new cycle
-                // (which will be inserted into our SSSR set) or an empty graph.
-                if (candidate.numEdges() != 0) {
-                    mSSSR.push_back(candidate);
+                    if (checkCycle(g0, p, q)) {
+                        mSSSR.push_back(g0);
+                    }
                 }
-
-                // Early exit if all the correct number of cycles has been found.
-                if (mSSSR.size() == mNumSSSR) return;
             }
         }
     }
@@ -397,6 +467,9 @@ SSSR::_constructSSSR()
 void
 SSSR::_convertNodeIndices()
 {
+    // Check for early out
+    if (!mNeedConversion) return;
+
     std::vector<UndirectedGraph> result(mSSSR.size());
     for (size_t i = 0, n = mSSSR.size(); i < n; ++i) {
         for (const auto& [node, conn] : mSSSR[i]) {
@@ -406,6 +479,40 @@ SSSR::_convertNodeIndices()
         }
     }
     mSSSR = result;
+}
+
+void
+SSSR::_replaceIndices(Path& p) const
+{
+    for (NodeType& n : p) {
+        n = mNodeMap[n];
+    }
+}
+
+SSSR::Path
+SSSR::_convertIndices(Path p) const
+{
+    _replaceIndices(p);
+    return p;
+}
+
+void
+SSSR::_replaceIndices(UndirectedGraph& g) const
+{
+    UndirectedGraph tmp;
+    for (const auto& [node, conn] : g) {
+        for (const NodeType c : conn) {
+            tmp.addEdge(mNodeMap[node], mNodeMap[c]);
+        }
+    }
+    g = tmp;
+}
+
+UndirectedGraph
+SSSR::_convertIndices(UndirectedGraph g) const
+{
+    _replaceIndices(g);
+    return g;
 }
 
 void

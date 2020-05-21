@@ -2,13 +2,13 @@
 #define UNDIRECTED_GRAPH_HAS_BEEN_INCLUDED
 
 #include <algorithm>
+#include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 
-#include <iostream>
 
 namespace vspc
 {
@@ -31,6 +31,8 @@ public:
     void addEdge(NodeType i, NodeType j);
     void removeEdge(NodeType i, NodeType j);
 
+    /// @return @c True if node @a i is in the graph.
+    bool hasNode(NodeType i) const;
     /// @return @c True if nodes @a i and @j are connected.
     bool hasEdge(NodeType i, NodeType j) const;
 
@@ -68,6 +70,9 @@ public:
     /// @return Human-readable information about this undirected graph.
     std::string str() const;
 
+    friend bool operator==(const UndirectedGraph& lhs,
+                           const UndirectedGraph& rhs);
+
 private:
     size_t                                 mNumEdges;
     std::map<NodeType, std::set<NodeType>> mConnectivity;
@@ -76,6 +81,8 @@ private:
 // -----------------------------------------------------------------------------
 
 UndirectedGraph operator^(UndirectedGraph lhs, const UndirectedGraph& rhs);
+
+bool operator==(const UndirectedGraph& lhs, const UndirectedGraph& rhs);
 
 std::ostream& operator<<(std::ostream& os, const UndirectedGraph& obj);
 
@@ -159,6 +166,12 @@ UndirectedGraph::removeEdge(NodeType i, NodeType j)
 }
 
 bool
+UndirectedGraph::hasNode(NodeType i) const
+{
+    return mConnectivity.find(i) != mConnectivity.cend();
+}
+
+bool
 UndirectedGraph::hasEdge(NodeType i, NodeType j) const
 {
     // No self-loops
@@ -168,9 +181,9 @@ UndirectedGraph::hasEdge(NodeType i, NodeType j) const
     if (j < i) std::swap(i, j);
 
     const auto it1 = mConnectivity.find(i);
-    if (it1 != mConnectivity.end()) {
+    if (it1 != mConnectivity.cend()) {
         const auto it2 = it1->second.find(j);
-        if (it2 != it1->second.end()) {
+        if (it2 != it1->second.cend()) {
             return true;
         }
     }
@@ -282,14 +295,6 @@ UndirectedGraph::swap(UndirectedGraph& other)
 std::string
 UndirectedGraph::str() const
 {
-    // This method isn't trivial because this class only explicitly stores
-    // edges via the smaller index of the two nodes that are connected.
-    // Hence, in order to accurately display the connectivity of the entire
-    // graph, some post-processing needs to happen to grab all relevant
-    // information. For example, if nodes 1 and 3 are connected, then
-    // it's trivial to list that node 1 is connected with node 3. However,
-    // displaying the reverse information requires a reverse lookup.
-
     std::ostringstream os;
     os << "Number of nodes: " << numNodes() << "\n";
     os << "Number of edges: " << numEdges() << "\n";
@@ -297,23 +302,6 @@ UndirectedGraph::str() const
         // Aliases for convenience
         const NodeType&           node        = it->first;
         const std::set<NodeType>& connections = it->second;
-
-        // // Reverse lookup to see if this node is connected with any nodes
-        // // whose index are less than it.
-        // std::set<NodeType> tmp;
-        // for (auto j = mConnectivity.begin(); j != it; ++j) {
-        //     // Alias
-        //     const std::set<NodeType>& s = j->second;
-        //     if (s.find(node) != s.end()) {
-        //         tmp.insert(j->first);
-        //     }
-        // }
-
-        // // Merge what's found with the set of saved connections.
-        // std::set<NodeType> allConnections;
-        // std::set_union(tmp.begin(), tmp.end(),
-        //                connections.begin(), connections.end(),
-        //                std::inserter(allConnections, allConnections.begin()));
 
         // Write to stream
         os << "  Node: " << node;
@@ -332,6 +320,12 @@ UndirectedGraph
 operator^(UndirectedGraph lhs, const UndirectedGraph& rhs)
 {
     return lhs ^= rhs;
+}
+
+bool
+operator==(const UndirectedGraph& lhs, const UndirectedGraph& rhs)
+{
+    return lhs.mConnectivity == rhs.mConnectivity;
 }
 
 std::ostream&
