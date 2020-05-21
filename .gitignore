@@ -3,5 +3,5 @@
 .sconsign.dblite
 .DS_Store
 *.csv
-debug
-release
+build
+main

@@ -1,146 +1,183 @@
 #!/usr/bin/python3
 
-import os
-import itertools
 import math
 import multiprocessing as mp
+import os
 import shlex
 import subprocess
 import sys
 
-# These global variables are changed later
+# This will be initialized during main.
 EXE = ''
-MAX_LEN = 0
-
-# These global variables are not changed
-DONE_STR = 'DONE'
-STATUS_STR = 'Status'
-OUT_FILE_STR = 'Output Files'
-SKIP_FILE_STR = 'Skipped Files'
 
 
+class FileManager:
+    CONST_OUT_FILE  = 'Output Files'
+    CONST_SKIP_FILE = 'Skipped Files'
+    CONST_DONE      = 'Done'
+    CONST_STATUS    = 'Status'
+    CONST_DNE       = 'DNE'
+    CONST_NO_WRITE  = 'No write'
 
-class Colors:
-    End          = '\033[0m'
-    Default      = "\033[39m"
-    Black        = "\033[30m"
-    Red          = "\033[31m"
-    Green        = "\033[32m"
-    Yellow       = "\033[33m"
-    Blue         = "\033[34m"
-    Magenta      = "\033[35m"
-    Cyan         = "\033[36m"
-    LightGray    = "\033[37m"
-    DarkGray     = "\033[90m"
-    LightRed     = "\033[91m"
-    LightGreen   = "\033[92m"
-    LightYellow  = "\033[93m"
-    LightBlue    = "\033[94m"
-    LightMagenta = "\033[95m"
-    LightCyan    = "\033[96m"
-    White        = "\033[97m"
+    def __init__(self, files):
+        # Filter out any files that aren't csv files
+        # Filter out any files with 'cycles' as a substring in the base filename
+        # Filter out any files whose base filename doesn't start with graph
+        files = [f for f in files if os.path.basename(f).endswith('csv')]
+        files = [f for f in files if 'cycles' not in os.path.basename(f)]
+        files = [f for f in files if os.path.basename(f).startswith('graph')]
+
+        self.filesDNE         = []
+        self.filesNoOverwrite = []
+        self.filesIO          = []
+
+        self.maxFileLength = 0
+
+        self.separator    = ''
+        self.outputTitle  = ''
+        self.skippedTitle = ''
+
+        for f in files:
+            self._sortFile(f)
+
+        self._initSeparator()
+        self._initOutputTitle()
+        self._initSkippedTitle()
+
+    def launchParallel(self):
+        # Early out if there are no files to process
+        if len(self.filesIO) == 0: return
+
+        # Pretty title for outputs
+        self._printSeparator()
+        self._printOutputTitle()
+        self._printSeparator()
+
+        # Initialize lock for printing in parallel
+        lock = mp.Lock()
+        # Initialize pool for launching tasks asynchronously
+        pool = mp.Pool(initializer = self._initLock,
+                       initargs    = (lock,),
+                       processes   = mp.cpu_count())
+        # Launch asynchronous processes
+        pool.map_async(self._processFile, self.filesIO)
+        pool.close()
+        pool.join()
+
+        self._printSeparator()
+
+        if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+            # Pretty title for skipped
+            self._printSkippedTitle()
+            self._printSeparator()
+
+            # Print skipped files
+            self._printSkippedFiles()
+            self._printSeparator()
 
 
-def init(l):
-    global lock
-    lock = l
+    def _printSeparator(self):
+        print(self.separator)
+
+    def _printOutputTitle(self):
+        print(self.outputTitle)
+
+    def _printSkippedTitle(self):
+        print(self.skippedTitle)
+
+    def _printSkippedFiles(self):
+        # Red status for files that don't exist
+        for f in self.filesDNE:
+            out = '| ' + f
+            out += ' ' * (self.maxFileLength - len(f) + 1)
+            out += '|   ' + '\033[91m' + self.CONST_DNE + '\033[0m' + '    |'
+            print(out)
+        # Cyan status for files marked as no overwrite
+        for f in self.filesNoOverwrite:
+            out = '| ' + f
+            out += ' ' * (self.maxFileLength - len(f) + 1)
+            out += '| ' + '\033[96m' + self.CONST_NO_WRITE + '\033[0m' + ' |'
+            print(out)
+
+    def _processFile(self, ioPair):
+        greenStart = '\033[32m'
+        greenEnd   = '\033[0m'
+        inFile, outFile = ioPair
+        cmd = ' '.join([EXE, inFile, outFile])
+        subprocess.check_call(shlex.split(cmd))
+        lock.acquire()
+        stat = '| ' + outFile
+        stat += ' ' * (self.maxFileLength - len(outFile) + 1)
+        stat += '|   ' + '\033[32m' + self.CONST_DONE + '\033[0m' + '   |'
+        print(stat)
+        lock.release()
+
+    def _sortFile(self, f):
+        if not os.path.exists(f):
+            if len(f) > self.maxFileLength:
+                self.maxFileLength = len(f)
+            self.filesDNE.append(f)
+        else:
+            outFile = os.path.dirname(f) + '/'
+            outFile += os.path.basename(f).replace('graph', 'cycles')
+            if os.path.exists(outFile):
+                resp = input(outFile + " already exists. Overwrite [y/n]? ")
+                if resp == 'y' or resp == 'Y':
+                    if len(outFile) > self.maxFileLength:
+                        self.maxFileLength = len(outFile)
+                    self.filesIO.append((f, outFile))
+                else:
+                    if len(f) > self.maxFileLength:
+                        self.maxFileLength = len(f)
+                    self.filesNoOverwrite.append(f)
+            else:
+                if len(outFile) > self.maxFileLength:
+                    self.maxFileLength = len(outFile)
+                self.filesIO.append((f, outFile))
+
+    def _initLock(self, l):
+        global lock
+        lock = l
+
+    def _initSeparator(self):
+        # Note: CONST_NOT_GRAPH is the longest status name
+        self.separator  = '+'
+        self.separator += '-' * (self.maxFileLength + 2)
+        self.separator += '+'
+        self.separator += '-' * (len(self.CONST_NO_WRITE) + 2)
+        self.separator += '+'
+
+    def _initOutputTitle(self):
+        totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_OUT_FILE)
+        preSpaceLen   = math.floor((totalSpaceLen) / 2)
+        postSpaceLen  = totalSpaceLen - preSpaceLen
+        self.outputTitle = '|'
+        self.outputTitle += ' ' * preSpaceLen
+        self.outputTitle += self.CONST_OUT_FILE
+        self.outputTitle += ' ' * postSpaceLen
+        self.outputTitle += '|  ' + self.CONST_STATUS + '  |'
+
+    def _initSkippedTitle(self):
+        totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_SKIP_FILE)
+        preSpaceLen   = math.floor((totalSpaceLen) / 2)
+        postSpaceLen  = totalSpaceLen - preSpaceLen
+        self.skippedTitle = '|'
+        self.skippedTitle += ' ' * preSpaceLen
+        self.skippedTitle += self.CONST_SKIP_FILE
+        self.skippedTitle += ' ' * postSpaceLen
+        self.skippedTitle += '|  ' + self.CONST_STATUS + '  |'
 
 
 def main(files):
     # Initialize path to the executable, which should be in the same directory
     # as this script if it was installed via CMake
     global EXE
-    global MAX_LEN
     EXE = os.path.dirname(os.path.realpath(__file__)) + '/main'
 
-    # Filter out any files with 'cycles' as a substring in the base filename
-    files = [f for f in files if 'cycles' not in os.path.basename(f)]
-
-    # Find maximum file length for pretty output
-    for f in files:
-        if len(f) > MAX_LEN:
-            MAX_LEN = len(f)
-
-    notCSVFiles      = []
-    dneFiles         = []
-    notGraphFiles    = []
-    noOverwriteFiles = []
-    ioFiles          = []
-
-    for f in files:
-        if not f.endswith('.csv'):
-            notCSVFiles.append(f);
-        else:
-            if not os.path.exists(f):
-                dneFiles.append(f)
-            else:
-                bname = os.path.basename(f)
-                if bname.find('graph') == -1:
-                    notGraphFiles.append(f)
-                else:
-                    outFile = os.path.dirname(f) + '/'
-                    outFile += bname.replace('graph', 'cycles')
-                    if os.path.exists(outFile):
-                        resp = input(outFile + " already exists. Overwrite [y/n]? ")
-                        if resp == 'y' or resp == 'Y':
-                            ioFiles.append((f, outFile))
-                        else:
-                            noOverwriteFiles.append(f)
-                    else:
-                        ioFiles.append((f, outFile))
-
-    # Pretty output
-    printSeparator()
-    printOutputTitle()
-    printSeparator()
-
-    # Initialize lock for printing in parallel
-    lock = mp.Lock()
-    # Initialize pool for launching tasks asynchronously
-    pool = mp.Pool(initializer = init,
-                   initargs = (lock,),
-                   processes = mp.cpu_count())
-    # Launch asynchronous processes
-    pool.map_async(processFile, ioFiles)
-    pool.close()
-    pool.join()
-
-    printSeparator()
-
-    print('+-----------------------------------------------------------+')
-    print('|                          Skipped                          |')
-    print('+-----------------------------------------------------------+')
-    # Print the skipped files nicely
-
-
-def processFile(ioPair):
-    inFile, outFile = ioPair
-    cmd = ' '.join([EXE, inFile, outFile])
-    subprocess.check_call(shlex.split(cmd))
-    lock.acquire()
-    out = '| ' + inFile
-    out += ' ' * (MAX_LEN - len(inFile) + 1)
-    out += '|  ' + Colors.Green + DONE_STR + Colors.End + '  |'
-    print(out)
-    lock.release()
-
-
-def printSeparator():
-    sep  = '+'
-    sep += '-' * (MAX_LEN + 2)
-    sep += '+'
-    sep += '-' * (len(STATUS_STR) + 2)
-    sep += '+'
-    print(sep)
-
-
-def printOutputTitle():
-    outputTitle = '|'
-    outputTitle += ' ' * math.floor((MAX_LEN + 2 - len(OUT_FILE_STR)) / 2)
-    outputTitle += OUT_FILE_STR
-    outputTitle += ' ' * math.ceil((MAX_LEN + 2 - len(OUT_FILE_STR)) / 2)
-    outputTitle += '| ' + STATUS_STR + ' |'
-    print(outputTitle)
+    # Initialize FileManager class, which does everything for us
+    manager = FileManager(files)
+    # Launch processes in parallel
+    manager.launchParallel()
 
 
 if __name__ == '__main__':

@@ -295,14 +295,6 @@ UndirectedGraph::swap(UndirectedGraph& other)
 std::string
 UndirectedGraph::str() const
 {
-    // This method isn't trivial because this class only explicitly stores
-    // edges via the smaller index of the two nodes that are connected.
-    // Hence, in order to accurately display the connectivity of the entire
-    // graph, some post-processing needs to happen to grab all relevant
-    // information. For example, if nodes 1 and 3 are connected, then
-    // it's trivial to list that node 1 is connected with node 3. However,
-    // displaying the reverse information requires a reverse lookup.
-
     std::ostringstream os;
     os << "Number of nodes: " << numNodes() << "\n";
     os << "Number of edges: " << numEdges() << "\n";
@@ -310,23 +302,6 @@ UndirectedGraph::str() const
         // Aliases for convenience
         const NodeType&           node        = it->first;
         const std::set<NodeType>& connections = it->second;
-
-        // // Reverse lookup to see if this node is connected with any nodes
-        // // whose index are less than it.
-        // std::set<NodeType> tmp;
-        // for (auto j = mConnectivity.begin(); j != it; ++j) {
-        //     // Alias
-        //     const std::set<NodeType>& s = j->second;
-        //     if (s.find(node) != s.end()) {
-        //         tmp.insert(j->first);
-        //     }
-        // }
-
-        // // Merge what's found with the set of saved connections.
-        // std::set<NodeType> allConnections;
-        // std::set_union(tmp.begin(), tmp.end(),
-        //                connections.begin(), connections.end(),
-        //                std::inserter(allConnections, allConnections.begin()));
 
         // Write to stream
         os << "  Node: " << node;
