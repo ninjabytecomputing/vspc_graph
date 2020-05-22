@@ -20,18 +20,19 @@ class FileManager:
     CONST_NO_WRITE  = 'No write'
 
     def __init__(self, files):
-        # Filter out any files that aren't csv files
-        # Filter out any files with 'cycles' as a substring in the base filename
-        # Filter out any files whose base filename doesn't start with graph
+        # Keep csv files
         files = [f for f in files if os.path.basename(f).endswith('csv')]
-        files = [f for f in files if 'cycles' not in os.path.basename(f)]
+        # Keep files whose base file name does not begin with 'cycles'
+        files = [f for f in files if not os.path.basename(f).startswith('cycles')]
+        # Keep files whose base file name starts with graph
         files = [f for f in files if os.path.basename(f).startswith('graph')]
 
         self.filesDNE         = []
         self.filesNoOverwrite = []
         self.filesIO          = []
 
-        self.maxFileLength = 0
+        self.maxFileLength = max(len(self.CONST_OUT_FILE),
+                                 len(self.CONST_SKIP_FILE))
 
         self.separator    = ''
         self.outputTitle  = ''
@@ -46,28 +47,28 @@ class FileManager:
 
     def launchParallel(self):
         # Early out if there are no files to process
-        if len(self.filesIO) == 0: return
+        if len(self.filesIO) > 0:
+            self._printSeparator()
+            self._printOutputTitle()
+            self._printSeparator()
 
-        # Pretty title for outputs
-        self._printSeparator()
-        self._printOutputTitle()
-        self._printSeparator()
-
-        # Initialize lock for printing in parallel
-        lock = mp.Lock()
-        # Initialize pool for launching tasks asynchronously
-        pool = mp.Pool(initializer = self._initLock,
-                       initargs    = (lock,),
-                       processes   = mp.cpu_count())
-        # Launch asynchronous processes
-        pool.map_async(self._processFile, self.filesIO)
-        pool.close()
-        pool.join()
-
-        self._printSeparator()
+            # Initialize lock for printing in parallel
+            lock = mp.Lock()
+            # Initialize pool for launching tasks asynchronously
+            pool = mp.Pool(initializer = self._initLock,
+                           initargs    = (lock,),
+                           processes   = mp.cpu_count())
+            # Launch asynchronous processes
+            pool.map_async(self._processFile, self.filesIO)
+            pool.close()
+            pool.join()
+            self._printSeparator()
 
         if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
-            # Pretty title for skipped
+            # If there were no files to process, then we need to first
+            # print a separator line.
+            if len(self.filesIO) == 0:
+                self._printSeparator()
             self._printSkippedTitle()
             self._printSeparator()
 
