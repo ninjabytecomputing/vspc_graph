@@ -20,11 +20,11 @@ class FileManager:
     CONST_NO_WRITE  = 'No write'
 
     def __init__(self, files):
-        # Filter out any files that aren't csv files
-        # Filter out any files with 'cycles' as a substring in the base filename
-        # Filter out any files whose base filename doesn't start with graph
+        # Keep csv files
         files = [f for f in files if os.path.basename(f).endswith('csv')]
-        files = [f for f in files if 'cycles' not in os.path.basename(f)]
+        # Keep files whose base file name does not begin with 'cycles'
+        files = [f for f in files if not os.path.basename(f).startswith('cycles')]
+        # Keep files whose base file name starts with graph
         files = [f for f in files if os.path.basename(f).startswith('graph')]
 
         self.filesDNE         = []
