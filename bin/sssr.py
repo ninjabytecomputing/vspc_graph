@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import argparse
 import math
 import multiprocessing as mp
 import os
@@ -19,7 +20,7 @@ class FileManager:
     CONST_DNE       = 'DNE'
     CONST_NO_WRITE  = 'No write'
 
-    def __init__(self, files):
+    def __init__(self, files, overwrite):
         # Keep csv files
         files = [f for f in files if os.path.basename(f).endswith('csv')]
         # Keep files whose base file name does not begin with 'cycles'
@@ -39,7 +40,7 @@ class FileManager:
         self.skippedTitle = ''
 
         for f in files:
-            self._sortFile(f)
+            self._sortFile(f, overwrite)
 
         self._initSeparator()
         self._initOutputTitle()
@@ -57,7 +58,7 @@ class FileManager:
             # Initialize pool for launching tasks asynchronously
             pool = mp.Pool(initializer = self._initLock,
                            initargs    = (lock,),
-                           processes   = mp.cpu_count())
+                           processes   = mp.cpu_count()-1)
             # Launch asynchronous processes
             pool.map_async(self._processFile, self.filesIO)
             pool.close()
@@ -113,7 +114,7 @@ class FileManager:
         print(stat)
         lock.release()
 
-    def _sortFile(self, f):
+    def _sortFile(self, f, overwrite):
         if not os.path.exists(f):
             if len(f) > self.maxFileLength:
                 self.maxFileLength = len(f)
@@ -121,7 +122,7 @@ class FileManager:
         else:
             outFile = os.path.dirname(f) + '/'
             outFile += os.path.basename(f).replace('graph', 'cycles')
-            if os.path.exists(outFile):
+            if os.path.exists(outFile) and not overwrite:
                 resp = input(outFile + " already exists. Overwrite [y/n]? ")
                 if resp == 'y' or resp == 'Y':
                     if len(outFile) > self.maxFileLength:
@@ -175,8 +176,20 @@ def main(files):
     global EXE
     EXE = os.path.dirname(os.path.realpath(__file__)) + '/main'
 
+    # Check for any flags
+    parser = argparse.ArgumentParser(
+        description = 'Process graph connectivity data to detect all cycles. \
+            The connectivity data must be supplied in a CSV file where each \
+            row represents an undirected edge by listing the indices of the \
+            two nodes that flank the edge.')
+    parser.add_argument('files', type=str, nargs='+',
+                        help='files to be processed')
+    parser.add_argument('--overwrite', action='store_true',
+                        help='overwrite all output files already generated')
+    args = parser.parse_args()
+
     # Initialize FileManager class, which does everything for us
-    manager = FileManager(files)
+    manager = FileManager(args.files, args.overwrite)
     # Launch processes in parallel
     manager.launchParallel()
 
