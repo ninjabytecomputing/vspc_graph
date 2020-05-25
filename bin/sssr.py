@@ -47,6 +47,12 @@ class FileManager:
         self._initSkippedTitle()
 
     def launchParallel(self):
+        '''
+        Process all files in parallel. Status updates are automatically
+        to the terminal when a file has finished. After all files have
+        been processed, all of the input files that were skipped are
+        printed as well.
+        '''
         # Early out if there are no files to process
         if len(self.filesIO) > 0:
             self._printSeparator()
@@ -79,15 +85,19 @@ class FileManager:
 
 
     def _printSeparator(self):
+        ''' Print separator '''
         print(self.separator)
 
     def _printOutputTitle(self):
+        ''' Print title for the output files section '''
         print(self.outputTitle)
 
     def _printSkippedTitle(self):
+        ''' Print title for the skipped files section '''
         print(self.skippedTitle)
 
     def _printSkippedFiles(self):
+        ''' Print all skipped files. '''
         # Red status for files that don't exist
         for f in self.filesDNE:
             out = '| ' + f
@@ -102,6 +112,10 @@ class FileManager:
             print(out)
 
     def _processFile(self, ioPair):
+        '''
+        Call the C++ executable on the input-output file name pair, and print
+        a status update when it's done.
+        '''
         greenStart = '\033[32m'
         greenEnd   = '\033[0m'
         inFile, outFile = ioPair
@@ -115,6 +129,12 @@ class FileManager:
         lock.release()
 
     def _sortFile(self, f, overwrite):
+        '''
+        Sort the input file into one of three categories for processing:
+            1) input file doesn't exist,
+            2) output file exists but shouldn't be overwritten, or
+            3) input file should be processed.
+        '''
         if not os.path.exists(f):
             if len(f) > self.maxFileLength:
                 self.maxFileLength = len(f)
@@ -123,25 +143,27 @@ class FileManager:
             outFile = os.path.dirname(f) + '/'
             outFile += os.path.basename(f).replace('graph', 'cycles')
             if os.path.exists(outFile) and not overwrite:
-                resp = input(outFile + " already exists. Overwrite [y/n]? ")
-                if resp == 'y' or resp == 'Y':
-                    if len(outFile) > self.maxFileLength:
-                        self.maxFileLength = len(outFile)
-                    self.filesIO.append((f, outFile))
-                else:
-                    if len(f) > self.maxFileLength:
-                        self.maxFileLength = len(f)
-                    self.filesNoOverwrite.append(f)
+                if len(f) > self.maxFileLength:
+                    self.maxFileLength = len(f)
+                self.filesNoOverwrite.append(f)
             else:
                 if len(outFile) > self.maxFileLength:
                     self.maxFileLength = len(outFile)
                 self.filesIO.append((f, outFile))
 
     def _initLock(self, l):
+        '''
+        Initialize the global lock that is used to write the output in
+        a thread-safe manner.
+        '''
         global lock
         lock = l
 
     def _initSeparator(self):
+        '''
+        Construct the string for the horizontal bar (separator) for the
+        output.
+        '''
         # Note: CONST_NOT_GRAPH is the longest status name
         self.separator  = '+'
         self.separator += '-' * (self.maxFileLength + 2)
@@ -150,6 +172,10 @@ class FileManager:
         self.separator += '+'
 
     def _initOutputTitle(self):
+        '''
+        Construct the string for the title of the 'output files' section
+        of the output.
+        '''
         totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_OUT_FILE)
         preSpaceLen   = math.floor((totalSpaceLen) / 2)
         postSpaceLen  = totalSpaceLen - preSpaceLen
@@ -160,6 +186,10 @@ class FileManager:
         self.outputTitle += '|  ' + self.CONST_STATUS + '  |'
 
     def _initSkippedTitle(self):
+        '''
+        Construct the string for the title of the 'skipped files' section
+        of the output.
+        '''
         totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_SKIP_FILE)
         preSpaceLen   = math.floor((totalSpaceLen) / 2)
         postSpaceLen  = totalSpaceLen - preSpaceLen
