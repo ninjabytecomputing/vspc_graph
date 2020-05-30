@@ -25,6 +25,16 @@ class SSSR
 public:
     using NodeType = UndirectedGraph::NodeType;
 
+    class Settings
+    {
+    public:
+        Settings() {};
+        void setMaxCycleLength(const int len) { mMaxCycleLength = len; }
+        int getMaxCycleLength() const { return mMaxCycleLength; }
+    private:
+        int mMaxCycleLength = -1;
+    };
+
     class Path
     {
     public:
@@ -80,7 +90,8 @@ public:
         std::list<Path> const * const mPathP;
     };
 
-    explicit SSSR(const UndirectedGraph& graph);
+    explicit SSSR(const UndirectedGraph& graph,
+                  const Settings& settings = {});
 
     const std::vector<UndirectedGraph>& run();
 
@@ -88,7 +99,7 @@ public:
 
 private:
     void _initializePID();
-    void _makeCandidateRing();
+    void _makeCandidateRings();
     void _constructSSSR();
     void _convertNodeIndices();
 
@@ -110,13 +121,14 @@ private:
 
     void _process(const size_t ij, const size_t ik, const size_t kj);
 
-    bool                                   mNeedConversion;
-    const UndirectedGraph&                 mGraph;
-    std::vector<NodeType>                  mNodeMap;
     UpperTriangularMatrix<float>           mDold, mDnew;
     UpperTriangularMatrix<std::list<Path>> mP, mPp;
     std::list<CandidateRing>               mCandidates;
     std::vector<UndirectedGraph>           mSSSR;
+    std::vector<NodeType>                  mNodeMap;
+    const UndirectedGraph&                 mGraph;
+    const Settings&                        mSettings;
+    bool                                   mNeedConversion;
 };
 
 
@@ -255,14 +267,15 @@ bool operator<(const SSSR::CandidateRing& lhs, const SSSR::CandidateRing& rhs)
 
 // -----------------------------------------------------------------------------
 
-SSSR::SSSR(const UndirectedGraph& graph)
-    : mNeedConversion(false)
-    , mGraph(graph)
-    , mNodeMap(graph.numNodes())
-    , mDold(graph.numNodes(), INFINITY)
+SSSR::SSSR(const UndirectedGraph& graph, const Settings& settings)
+    : mDold(graph.numNodes(), INFINITY)
     , mDnew(graph.numNodes(), INFINITY)
     , mP(graph.numNodes())
     , mPp(graph.numNodes())
+    , mNodeMap(graph.numNodes())
+    , mGraph(graph)
+    , mSettings(settings)
+    , mNeedConversion(false)
 {
     const std::set<NodeType> nodes = graph.getNodes();
     std::copy(nodes.cbegin(), nodes.cend(), mNodeMap.begin());
@@ -294,7 +307,7 @@ const std::vector<UndirectedGraph>&
 SSSR::run()
 {
     _initializePID();
-    _makeCandidateRing();
+    _makeCandidateRings();
     _constructSSSR();
     _convertNodeIndices();
     return mSSSR;
@@ -374,7 +387,7 @@ SSSR::_initializePID()
 }
 
 void
-SSSR::_makeCandidateRing()
+SSSR::_makeCandidateRings()
 {
     for (size_t i = 0, n = mNodeMap.size(); i < n; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
@@ -384,9 +397,15 @@ SSSR::_makeCandidateRing()
                 continue;
             } else {
                 if (mP(ij).size() > 1) {
-                    mCandidates.emplace_back(2 * mDnew(ij), mP(ij));
+                    const size_t len = 2 * mDnew(ij);
+                    if (len <= mSettings.getMaxCycleLength()) {
+                        mCandidates.emplace_back(len, mP(ij));
+                    }
                 } else {
-                    mCandidates.emplace_back(2 * mDnew(ij) + 1, mP(ij), mPp(ij));
+                    const size_t len = 2 * mDnew(ij) + 1;
+                    if (len <= mSettings.getMaxCycleLength()) {
+                        mCandidates.emplace_back(len, mP(ij), mPp(ij));
+                    }
                 }
             }
         }
@@ -409,13 +428,22 @@ SSSR::_constructSSSR()
         // Nodes overlapped, not a good candidate
         if (g.numNodes() != g.numEdges()) { return false; }
 
-        // Check if we've already generated this cycle by simply checking
-        // for equality against what's already generated. We only need to
-        // check against the rings that have the same number of edges.
+        // Check if this new cycle satisfies one of the following:
+        //   1) already generated, which only needs to be checked against
+        //      cycles of the same length; or
+        //   2) contains all of a cycle that has already been generated.
+        // If either are true, we return false, i.e. we don't insert this
+        // new cycle into the SSSR set.
+        const std::set<NodeType> gNodes = g.getNodes();
         for (const UndirectedGraph& ring : mSSSR) {
             if (ring.numEdges() == g.numEdges()) {
                 if (g == ring) { return false; }
+            } else {
+                const std::set<NodeType> rNodes = ring.getNodes();
+                if (std::includes(gNodes.cbegin(), gNodes.cend(),
+                                  rNodes.cbegin(), rNodes.cend())) { return false; }
             }
+
         }
         return true;
     };
