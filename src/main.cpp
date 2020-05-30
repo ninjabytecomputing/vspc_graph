@@ -15,6 +15,7 @@ int main(int argc, char* argv[]) {
     std::string inputName(argv[1]);
     std::string outputName(argv[2]);
     std::vector<vspc::UndirectedGraph::Edge> edgeData;
+    vspc::SSSR::Settings settings;
 
     {
         std::ifstream fin(inputName);
@@ -26,7 +27,17 @@ int main(int argc, char* argv[]) {
         vspc::CSVIterator iter(fin);
 
         // Iterate past the metadata
-        while (iter->isMetadata()) { ++iter; }
+        while (iter->isMetadata()) {
+            const std::string& metadata = iter->operator[](0);
+            const auto idx = metadata.find("Max cycle length");
+            if (idx != std::string::npos) {
+                // 17 = length of "Max cycles length" + 1 to account for a
+                // possible colon. Even if there's no colon, this will be fine
+                // because of the space after the string.
+                settings.setMaxCycleLength(std::stoi(metadata.substr(idx + 17)));
+            }
+            ++iter;
+        }
 
         for (; iter; ++iter) {
             const vspc::CSVRow& edge = *iter;
@@ -37,7 +48,7 @@ int main(int argc, char* argv[]) {
     // Construct graph object
     vspc::UndirectedGraph graph(edgeData);
     // Construct SSSR object
-    vspc::SSSR op(graph);
+    vspc::SSSR op(graph, settings);
 
     // Find SSSR and return the vector of cycles
     const auto& cycles = op.run();
