@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import argparse
 import math
 import multiprocessing as mp
 import os
@@ -19,7 +20,7 @@ class FileManager:
     CONST_DNE       = 'DNE'
     CONST_NO_WRITE  = 'No write'
 
-    def __init__(self, files):
+    def __init__(self, files, overwrite):
         # Keep csv files
         files = [f for f in files if os.path.basename(f).endswith('csv')]
         # Keep files whose base file name does not begin with 'cycles'
@@ -39,13 +40,19 @@ class FileManager:
         self.skippedTitle = ''
 
         for f in files:
-            self._sortFile(f)
+            self._sortFile(f, overwrite)
 
         self._initSeparator()
         self._initOutputTitle()
         self._initSkippedTitle()
 
     def launchParallel(self):
+        '''
+        Process all files in parallel. Status updates are automatically
+        to the terminal when a file has finished. After all files have
+        been processed, all of the input files that were skipped are
+        printed as well.
+        '''
         # Early out if there are no files to process
         if len(self.filesIO) > 0:
             self._printSeparator()
@@ -57,7 +64,7 @@ class FileManager:
             # Initialize pool for launching tasks asynchronously
             pool = mp.Pool(initializer = self._initLock,
                            initargs    = (lock,),
-                           processes   = mp.cpu_count())
+                           processes   = mp.cpu_count()-1)
             # Launch asynchronous processes
             pool.map_async(self._processFile, self.filesIO)
             pool.close()
@@ -78,15 +85,19 @@ class FileManager:
 
 
     def _printSeparator(self):
+        ''' Print separator '''
         print(self.separator)
 
     def _printOutputTitle(self):
+        ''' Print title for the output files section '''
         print(self.outputTitle)
 
     def _printSkippedTitle(self):
+        ''' Print title for the skipped files section '''
         print(self.skippedTitle)
 
     def _printSkippedFiles(self):
+        ''' Print all skipped files. '''
         # Red status for files that don't exist
         for f in self.filesDNE:
             out = '| ' + f
@@ -101,6 +112,10 @@ class FileManager:
             print(out)
 
     def _processFile(self, ioPair):
+        '''
+        Call the C++ executable on the input-output file name pair, and print
+        a status update when it's done.
+        '''
         greenStart = '\033[32m'
         greenEnd   = '\033[0m'
         inFile, outFile = ioPair
@@ -113,7 +128,13 @@ class FileManager:
         print(stat)
         lock.release()
 
-    def _sortFile(self, f):
+    def _sortFile(self, f, overwrite):
+        '''
+        Sort the input file into one of three categories for processing:
+            1) input file doesn't exist,
+            2) output file exists but shouldn't be overwritten, or
+            3) input file should be processed.
+        '''
         if not os.path.exists(f):
             if len(f) > self.maxFileLength:
                 self.maxFileLength = len(f)
@@ -121,26 +142,28 @@ class FileManager:
         else:
             outFile = os.path.dirname(f) + '/'
             outFile += os.path.basename(f).replace('graph', 'cycles')
-            if os.path.exists(outFile):
-                resp = input(outFile + " already exists. Overwrite [y/n]? ")
-                if resp == 'y' or resp == 'Y':
-                    if len(outFile) > self.maxFileLength:
-                        self.maxFileLength = len(outFile)
-                    self.filesIO.append((f, outFile))
-                else:
-                    if len(f) > self.maxFileLength:
-                        self.maxFileLength = len(f)
-                    self.filesNoOverwrite.append(f)
+            if os.path.exists(outFile) and not overwrite:
+                if len(f) > self.maxFileLength:
+                    self.maxFileLength = len(f)
+                self.filesNoOverwrite.append(f)
             else:
                 if len(outFile) > self.maxFileLength:
                     self.maxFileLength = len(outFile)
                 self.filesIO.append((f, outFile))
 
     def _initLock(self, l):
+        '''
+        Initialize the global lock that is used to write the output in
+        a thread-safe manner.
+        '''
         global lock
         lock = l
 
     def _initSeparator(self):
+        '''
+        Construct the string for the horizontal bar (separator) for the
+        output.
+        '''
         # Note: CONST_NOT_GRAPH is the longest status name
         self.separator  = '+'
         self.separator += '-' * (self.maxFileLength + 2)
@@ -149,6 +172,10 @@ class FileManager:
         self.separator += '+'
 
     def _initOutputTitle(self):
+        '''
+        Construct the string for the title of the 'output files' section
+        of the output.
+        '''
         totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_OUT_FILE)
         preSpaceLen   = math.floor((totalSpaceLen) / 2)
         postSpaceLen  = totalSpaceLen - preSpaceLen
@@ -159,6 +186,10 @@ class FileManager:
         self.outputTitle += '|  ' + self.CONST_STATUS + '  |'
 
     def _initSkippedTitle(self):
+        '''
+        Construct the string for the title of the 'skipped files' section
+        of the output.
+        '''
         totalSpaceLen = self.maxFileLength + 2 - len(self.CONST_SKIP_FILE)
         preSpaceLen   = math.floor((totalSpaceLen) / 2)
         postSpaceLen  = totalSpaceLen - preSpaceLen
@@ -175,8 +206,20 @@ def main(files):
     global EXE
     EXE = os.path.dirname(os.path.realpath(__file__)) + '/main'
 
+    # Check for any flags
+    parser = argparse.ArgumentParser(
+        description = 'Process graph connectivity data to detect all cycles. \
+            The connectivity data must be supplied in a CSV file where each \
+            row represents an undirected edge by listing the indices of the \
+            two nodes that flank the edge.')
+    parser.add_argument('files', type=str, nargs='+',
+                        help='files to be processed')
+    parser.add_argument('--overwrite', action='store_true',
+                        help='overwrite all output files already generated')
+    args = parser.parse_args()
+
     # Initialize FileManager class, which does everything for us
-    manager = FileManager(files)
+    manager = FileManager(args.files, args.overwrite)
     # Launch processes in parallel
     manager.launchParallel()
 
