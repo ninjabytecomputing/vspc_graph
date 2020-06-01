@@ -20,7 +20,7 @@ class FileManager:
     CONST_DNE       = 'DNE'
     CONST_NO_WRITE  = 'No write'
 
-    def __init__(self, files, overwrite):
+    def __init__(self, files, overwrite, verbose):
         # Keep csv files
         files = [f for f in files if os.path.basename(f).endswith('csv')]
         # Keep files whose base file name does not begin with 'cycles'
@@ -28,10 +28,12 @@ class FileManager:
         # Keep files whose base file name starts with graph
         files = [f for f in files if os.path.basename(f).startswith('graph')]
 
+
         self.filesDNE         = []
         self.filesNoOverwrite = []
         self.filesIO          = []
 
+        self.verbose       = verbose
         self.maxFileLength = max(len(self.CONST_OUT_FILE),
                                  len(self.CONST_SKIP_FILE))
 
@@ -48,16 +50,17 @@ class FileManager:
 
     def launchParallel(self):
         '''
-        Process all files in parallel. Status updates are automatically
-        to the terminal when a file has finished. After all files have
-        been processed, all of the input files that were skipped are
-        printed as well.
+        Process all files in parallel. If verbose output is enabled,
+        status updates are printed to the terminal when each file has
+        finished. After all files have been processed, all of the
+        input files that were skipped are then printed as well.
         '''
         # Early out if there are no files to process
         if len(self.filesIO) > 0:
-            self._printSeparator()
-            self._printOutputTitle()
-            self._printSeparator()
+            if self.verbose:
+                self._printSeparator()
+                self._printOutputTitle()
+                self._printSeparator()
 
             # Initialize lock for printing in parallel
             lock = mp.Lock()
@@ -69,19 +72,21 @@ class FileManager:
             pool.map_async(self._processFile, self.filesIO)
             pool.close()
             pool.join()
-            self._printSeparator()
-
-        if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
-            # If there were no files to process, then we need to first
-            # print a separator line.
-            if len(self.filesIO) == 0:
+            if self.verbose:
                 self._printSeparator()
-            self._printSkippedTitle()
-            self._printSeparator()
 
-            # Print skipped files
-            self._printSkippedFiles()
-            self._printSeparator()
+        if self.verbose:
+            if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                # If there were no files to process, then we need to first
+                # print a separator line.
+                if len(self.filesIO) == 0:
+                    self._printSeparator()
+                self._printSkippedTitle()
+                self._printSeparator()
+
+                # Print skipped files
+                self._printSkippedFiles()
+                self._printSeparator()
 
 
     def _printSeparator(self):
@@ -121,12 +126,13 @@ class FileManager:
         inFile, outFile = ioPair
         cmd = ' '.join([EXE, inFile, outFile])
         subprocess.check_call(shlex.split(cmd))
-        lock.acquire()
-        stat = '| ' + outFile
-        stat += ' ' * (self.maxFileLength - len(outFile) + 1)
-        stat += '|   ' + '\033[32m' + self.CONST_DONE + '\033[0m' + '   |'
-        print(stat)
-        lock.release()
+        if self.verbose:
+            lock.acquire()
+            stat = '| ' + outFile
+            stat += ' ' * (self.maxFileLength - len(outFile) + 1)
+            stat += '|   ' + '\033[32m' + self.CONST_DONE + '\033[0m' + '   |'
+            print(stat)
+            lock.release()
 
     def _sortFile(self, f, overwrite):
         '''
@@ -213,13 +219,15 @@ def main(files):
             row represents an undirected edge by listing the indices of the \
             two nodes that flank the edge.')
     parser.add_argument('files', type=str, nargs='+',
-                        help='files to be processed')
+                        help='Files to be processed')
     parser.add_argument('--overwrite', action='store_true',
                         help='overwrite all output files already generated')
+    parser.add_argument('--verbose', action='store_true',
+                        help='print file information during runtime')
     args = parser.parse_args()
 
     # Initialize FileManager class, which does everything for us
-    manager = FileManager(args.files, args.overwrite)
+    manager = FileManager(args.files, args.overwrite, args.verbose)
     # Launch processes in parallel
     manager.launchParallel()
 
