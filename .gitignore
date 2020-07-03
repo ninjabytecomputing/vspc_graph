@@ -3,5 +3,7 @@
 .sconsign.dblite
 .DS_Store
 *.csv
+.vscode
 build
 main
+vspc_graph
