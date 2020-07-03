@@ -210,7 +210,7 @@ def main(files):
     # Initialize path to the executable, which should be in the same directory
     # as this script if it was installed via CMake
     global EXE
-    EXE = os.path.dirname(os.path.realpath(__file__)) + '/main'
+    EXE = os.path.dirname(os.path.realpath(__file__)) + '/vspc_graph'
 
     # Check for any flags
     parser = argparse.ArgumentParser(
