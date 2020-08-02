@@ -306,10 +306,18 @@ SSSR::SSSR(const UndirectedGraph& graph, const Settings& settings)
 const std::vector<UndirectedGraph>&
 SSSR::run()
 {
+    std::cout << "Initialize" << std::endl;
     _initializePID();
+
+    std::cout << "Candidates" << std::endl;
     _makeCandidateRings();
+
+    std::cout << "Construct" << std::endl;
     _constructSSSR();
+
+    std::cout << "Convert" << std::endl;
     _convertNodeIndices();
+
     return mSSSR;
 }
 
@@ -317,6 +325,7 @@ void
 SSSR::_initializePID()
 {
     for (size_t k = 0, n = mNodeMap.size(); k < n; ++k) {
+        std::cout << "  " << k << std::endl;
 
         // i < k
         for (size_t i = 0; i < k; ++i) {
@@ -336,7 +345,7 @@ SSSR::_initializePID()
             const size_t ik = mDold.index(i, k);
 
             // k <= j
-            for (size_t j = k; j < n; ++j) {
+            for (size_t j = k + 1; j < n; ++j) {
                 const size_t ij = mDold.index(i, j);
                 const size_t kj = mDold.index(k, j);
 
@@ -345,7 +354,7 @@ SSSR::_initializePID()
         }
 
         // k <= i
-        for (size_t i = k; i < n; ++i) {
+        for (size_t i = k + 1; i < n; ++i) {
             const size_t ik = mDold.index(k, i);
 
             // i < j
@@ -359,6 +368,7 @@ SSSR::_initializePID()
 
         mDold = mDnew;
     }
+    std::cout << mDnew << std::endl;
 
 #ifdef _VERBOSE
     std::cout << "Matrix P" << std::endl;
