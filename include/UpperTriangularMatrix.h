@@ -41,6 +41,10 @@ public:
     /// @return Dimension of the square matrix.
     size_t dim() const { return mSize; }
 
+    /// @return Number of elements in the upper triangular portion.
+    /// @details This count also includes the diagonal elements.
+    size_t numElements() const { return mData.size(); }
+
     /// @return Linear index into the upper-triangular matrix associated with
     /// the two-dimensional index.
     size_t index(size_t i, size_t j) const;
@@ -80,7 +84,9 @@ template <typename T>
 size_t
 UpperTriangularMatrix<T>::index(const size_t i, const size_t j) const
 {
+#ifdef _DEBUG
     assert(i <= j);
+#endif
     return mData.size() - ((mSize - i) * (mSize + 1 - i) / 2 + i) + j;
 }
 

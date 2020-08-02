@@ -368,7 +368,6 @@ SSSR::_initializePID()
 
         mDold = mDnew;
     }
-    std::cout << mDnew << std::endl;
 
 #ifdef _VERBOSE
     std::cout << "Matrix P" << std::endl;
