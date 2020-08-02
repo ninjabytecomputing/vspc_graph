@@ -324,6 +324,13 @@ SSSR::run()
 void
 SSSR::_initializePID()
 {
+    // TODO What happens if we compute the flat indices ourselves instead of
+    // relying on the helper function to do so? We would save on some
+    // computation time... But first, need to work out the math to cache
+    // as much of the computation as possible.
+
+    const size_t numElem = mDold.numElements();
+
     for (size_t k = 0, n = mNodeMap.size(); k < n; ++k) {
         std::cout << "  " << k << std::endl;
 
