@@ -6,12 +6,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <iostream>
 #include <iterator> // std::distance
 #include <list>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range2d.h>
 
 namespace vspc
 {
@@ -330,50 +334,110 @@ SSSR::_initializePID()
     // as much of the computation as possible.
 
     const size_t numElem = mDold.numElements();
+    const size_t dim     = mDold.dim();
+
+    // Functor for computing the offset of the first dimension of indices
+    auto firstDimOffset = [numElem, dim](size_t i) {
+        return numElem - ((dim - i) * (dim + 1 - i) / 2 + i);
+    };
+
+    size_t iOffset, jOffset, kOffset;
+    size_t ik, ij, kj;
 
     for (size_t k = 0, n = mNodeMap.size(); k < n; ++k) {
-        std::cout << "  " << k << std::endl;
+        kOffset = firstDimOffset(k);
 
+        auto t1 = std::chrono::high_resolution_clock::now();
+
+        /////////////////////////////////////////////
+        // Case 1
         // i < k
         for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
+            // const size_t ik = mDold.index(i, k);
+            iOffset = firstDimOffset(i);
+            ik      = iOffset + k;
 
             // i < j < k
             for (size_t j = i + 1; j < k; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(j, k);
-
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(j, k);
+                ij = iOffset + j;
+                kj = firstDimOffset(j) + k;
                 _process(ij, ik, kj);
             }
         }
 
+        /////////////////////////////////////////////
+        // Case 2
         // i < k
         for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
+            // const size_t ik = mDold.index(i, k);
+            iOffset = firstDimOffset(i);
+            ik      = iOffset + k;
 
-            // k <= j
+            // k < j
             for (size_t j = k + 1; j < n; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
-
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(k, j);
+                ij = iOffset + j;
+                kj = kOffset + j;
                 _process(ij, ik, kj);
             }
         }
 
-        // k <= i
+        // tbb::parallel_for(tbb::blocked_range2d<size_t, size_t>(0, k, k + 1, n),
+        //     [this, &firstDimOffset, k, kOffset](tbb::blocked_range2d<size_t, size_t>& r)
+        //     {
+        //         auto rows = r.rows();
+        //         auto cols = r.cols();
+        //         size_t iOffset, ij, ik, kj;
+        //         for (auto i = rows.begin(), iEnd = rows.end(); i < iEnd; ++i) {
+        //             iOffset = firstDimOffset(i);
+        //             ik      = iOffset + k;
+        //             for (auto j = cols.begin(), jEnd = cols.end(); j < jEnd; ++j) {
+        //                 ij = iOffset + j;
+        //                 kj = kOffset + j;
+        //                 this->_process(ij, ik, kj);
+        //             }
+        //         }
+
+        //     }
+        // );
+
+        /////////////////////////////////////////////
+        // Case 3
+        // k < i
         for (size_t i = k + 1; i < n; ++i) {
-            const size_t ik = mDold.index(k, i);
+            // const size_t ik = mDold.index(k, i);
+            iOffset = firstDimOffset(i);
+            ik      = kOffset + i;
 
             // i < j
             for (size_t j = i + 1; j < n; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
-
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(k, j);
+                ij = iOffset + j;
+                kj = kOffset + j;
                 _process(ij, ik, kj);
             }
+
+            // tbb::parallel_for(tbb::blocked_range<size_t>(i+1, n),
+            //     [this, &firstDimOffset, i, kOffset, ik](tbb::blocked_range<size_t>& r)
+            //     {
+            //         for (auto j = r.begin(), jEnd = r.end(); j < jEnd; ++j) {
+            //             const size_t ij = firstDimOffset(i) + j;
+            //             const size_t kj = kOffset + j;
+            //             this->_process(ij, ik, kj);
+            //         }
+            //     }
+            // );
         }
 
         mDold = mDnew;
+
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        std::cout << k << " ::: " << duration << std::endl;
     }
 
 #ifdef _VERBOSE
@@ -562,8 +626,11 @@ SSSR::_convertIndices(UndirectedGraph g) const
 void
 SSSR::_process(const size_t ij, const size_t ik, const size_t kj)
 {
-    if (mDold(ij) > mDold(ik) + mDold(kj)) {
-        if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj) + 1) {
+    const auto dSum     = mDold(ik) + mDold(kj);
+    const auto isNotInf = !std::isinf(mDold(ij));
+
+    if (mDold(ij) > dSum) {
+        if (isNotInf && mDold(ij) == dSum + 1) {
 #ifdef _DEBUG
             assert(!mP(ij).empty());
 #endif
@@ -571,19 +638,19 @@ SSSR::_process(const size_t ij, const size_t ik, const size_t kj)
         } else {
             mPp(ij).clear();
         }
-        mDnew(ij) = mDold(ik) + mDold(kj);
+        mDnew(ij) = dSum;
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
 #endif
         mP(ij) = {merge(mP(ik).front(), mP(kj).front())};
-    } else if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj)) {
+    } else if (isNotInf && mDold(ij) == dSum) {
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
 #endif
         mP(ij).push_back(merge(mP(ik).front(), mP(kj).front()));
-    } else if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj) - 1) {
+    } else if (isNotInf && mDold(ij) == dSum - 1) {
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
