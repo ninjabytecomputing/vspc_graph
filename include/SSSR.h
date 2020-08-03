@@ -329,11 +329,6 @@ SSSR::run()
 void
 SSSR::_initializePID()
 {
-    // TODO What happens if we compute the flat indices ourselves instead of
-    // relying on the helper function to do so? We would save on some
-    // computation time... But first, need to work out the math to cache
-    // as much of the computation as possible.
-
     const size_t numElem = mDold.numElements();
     const size_t dim     = mDold.dim();
 
@@ -349,8 +344,8 @@ SSSR::_initializePID()
 
         tbb::parallel_invoke(
             [this, &firstDimOffset, k] {
+#if 1
                 // i < k
-#if 0
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, k),
                     [this, &firstDimOffset, k](tbb::blocked_range<size_t>& r)
                     {
@@ -370,6 +365,7 @@ SSSR::_initializePID()
                     }
                 );
 #else
+                // i < k
                 for (size_t i = 0; i < k; ++i) {
                     // const size_t ik = mDold.index(i, k);
                     const size_t iOffset = firstDimOffset(i);
@@ -387,7 +383,8 @@ SSSR::_initializePID()
 #endif
             },
             [this, &firstDimOffset, k, kOffset, n] {
-#if 0
+#if 1
+                // i < k, k < j
                 tbb::parallel_for(tbb::blocked_range2d<size_t, size_t>(0, k, k + 1, n),
                     [this, &firstDimOffset, k, kOffset](tbb::blocked_range2d<size_t, size_t>& r)
                     {
@@ -406,25 +403,26 @@ SSSR::_initializePID()
                     }
                 );
 #else
-                // for (size_t i = 0; i < k; ++i) {
-                //     // const size_t ik = mDold.index(i, k);
-                //     const size_t iOffset = firstDimOffset(i);
-                //     const size_t ik      = iOffset + k;
+                // i < k
+                for (size_t i = 0; i < k; ++i) {
+                    // const size_t ik = mDold.index(i, k);
+                    const size_t iOffset = firstDimOffset(i);
+                    const size_t ik      = iOffset + k;
 
-                //     // k < j
-                //     for (size_t j = k + 1; j < n; ++j) {
-                //         // const size_t ij = mDold.index(i, j);
-                //         // const size_t kj = mDold.index(k, j);
-                //         const size_t ij = iOffset + j;
-                //         const size_t kj = kOffset + j;
-                //         _process(ij, ik, kj);
-                //     }
-                // }
+                    // k < j
+                    for (size_t j = k + 1; j < n; ++j) {
+                        // const size_t ij = mDold.index(i, j);
+                        // const size_t kj = mDold.index(k, j);
+                        const size_t ij = iOffset + j;
+                        const size_t kj = kOffset + j;
+                        _process(ij, ik, kj);
+                    }
+                }
 #endif
             },
             [this, &firstDimOffset, k, kOffset, n] {
+#if 1
                 // k < i
-#if 0
                 tbb::parallel_for(tbb::blocked_range<size_t>(k + 1, n),
                     [this, &firstDimOffset, kOffset, n](tbb::blocked_range<size_t>& r)
                     {
@@ -444,6 +442,7 @@ SSSR::_initializePID()
                     }
                 );
 #else
+                // k < i
                 for (size_t i = k + 1; i < n; ++i) {
                     // const size_t ik = mDold.index(k, i);
                     const size_t iOffset = firstDimOffset(i);
@@ -461,78 +460,6 @@ SSSR::_initializePID()
 #endif
             }
         );
-
-        /////////////////////////////////////////////
-        // Case 1
-        // i < k
-        // for (size_t i = 0; i < k; ++i) {
-        //     // const size_t ik = mDold.index(i, k);
-        //     const size_t iOffset = firstDimOffset(i);
-        //     const size_t ik      = iOffset + k;
-
-        //     // i < j < k
-        //     for (size_t j = i + 1; j < k; ++j) {
-        //         // const size_t ij = mDold.index(i, j);
-        //         // const size_t kj = mDold.index(j, k);
-        //         const size_t ij = iOffset + j;
-        //         const size_t kj = firstDimOffset(j) + k;
-        //         _process(ij, ik, kj);
-        //     }
-        // }
-
-        /////////////////////////////////////////////
-        // Case 2
-        // i < k
-        // for (size_t i = 0; i < k; ++i) {
-        //     // const size_t ik = mDold.index(i, k);
-        //     const size_t iOffset = firstDimOffset(i);
-        //     const size_t ik      = iOffset + k;
-
-        //     // k < j
-        //     for (size_t j = k + 1; j < n; ++j) {
-        //         // const size_t ij = mDold.index(i, j);
-        //         // const size_t kj = mDold.index(k, j);
-        //         const size_t ij = iOffset + j;
-        //         const size_t kj = kOffset + j;
-        //         _process(ij, ik, kj);
-        //     }
-        // }
-
-        // tbb::parallel_for(tbb::blocked_range2d<size_t, size_t>(0, k, k + 1, n),
-        //     [this, &firstDimOffset, k, kOffset](tbb::blocked_range2d<size_t, size_t>& r)
-        //     {
-        //         auto rows = r.rows();
-        //         auto cols = r.cols();
-        //         size_t iOffset, ij, ik, kj;
-        //         for (auto i = rows.begin(), iEnd = rows.end(); i < iEnd; ++i) {
-        //             iOffset = firstDimOffset(i);
-        //             ik      = iOffset + k;
-        //             for (auto j = cols.begin(), jEnd = cols.end(); j < jEnd; ++j) {
-        //                 ij = iOffset + j;
-        //                 kj = kOffset + j;
-        //                 this->_process(ij, ik, kj);
-        //             }
-        //         }
-        //     }
-        // );
-
-        /////////////////////////////////////////////
-        // Case 3
-        // k < i
-        // for (size_t i = k + 1; i < n; ++i) {
-        //     // const size_t ik = mDold.index(k, i);
-        //     const size_t iOffset = firstDimOffset(i);
-        //     const size_t ik      = kOffset + i;
-
-        //     // i < j
-        //     for (size_t j = i + 1; j < n; ++j) {
-        //         // const size_t ij = mDold.index(i, j);
-        //         // const size_t kj = mDold.index(k, j);
-        //         const size_t ij = iOffset + j;
-        //         const size_t kj = kOffset + j;
-        //         _process(ij, ik, kj);
-        //     }
-        // }
 
         mDold = mDnew;
 
@@ -727,8 +654,11 @@ SSSR::_convertIndices(UndirectedGraph g) const
 void
 SSSR::_process(const size_t ij, const size_t ik, const size_t kj)
 {
-    const auto dSum     = mDold(ik) + mDold(kj);
-    const auto isNotInf = !std::isinf(mDold(ij));
+    float dSum = mDold(ik) + mDold(kj);
+    if (dSum > mSettings.getMaxCycleLength() / 2) {
+        dSum = INFINITY;
+    }
+    const bool isNotInf = !std::isinf(mDold(ij));
 
     if (mDold(ij) > dSum) {
         if (isNotInf && mDold(ij) == dSum + 1) {
