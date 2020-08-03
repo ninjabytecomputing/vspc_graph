@@ -350,7 +350,7 @@ SSSR::_initializePID()
         tbb::parallel_invoke(
             [this, &firstDimOffset, k] {
                 // i < k
-#if 1
+#if 0
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, k),
                     [this, &firstDimOffset, k](tbb::blocked_range<size_t>& r)
                     {
@@ -387,7 +387,7 @@ SSSR::_initializePID()
 #endif
             },
             [this, &firstDimOffset, k, kOffset, n] {
-#if 1
+#if 0
                 tbb::parallel_for(tbb::blocked_range2d<size_t, size_t>(0, k, k + 1, n),
                     [this, &firstDimOffset, k, kOffset](tbb::blocked_range2d<size_t, size_t>& r)
                     {
@@ -424,7 +424,7 @@ SSSR::_initializePID()
             },
             [this, &firstDimOffset, k, kOffset, n] {
                 // k < i
-#if 1
+#if 0
                 tbb::parallel_for(tbb::blocked_range<size_t>(k + 1, n),
                     [this, &firstDimOffset, kOffset, n](tbb::blocked_range<size_t>& r)
                     {
