@@ -344,7 +344,7 @@ SSSR::_initializePID()
 
         tbb::parallel_invoke(
             [this, &firstDimOffset, k] {
-#if 1
+#if 0
                 // i < k
                 tbb::parallel_for(tbb::blocked_range<size_t>(0, k),
                     [this, &firstDimOffset, k](tbb::blocked_range<size_t>& r)
@@ -383,7 +383,7 @@ SSSR::_initializePID()
 #endif
             },
             [this, &firstDimOffset, k, kOffset, n] {
-#if 1
+#if 0
                 // i < k, k < j
                 tbb::parallel_for(tbb::blocked_range2d<size_t, size_t>(0, k, k + 1, n),
                     [this, &firstDimOffset, k, kOffset](tbb::blocked_range2d<size_t, size_t>& r)
@@ -421,7 +421,7 @@ SSSR::_initializePID()
 #endif
             },
             [this, &firstDimOffset, k, kOffset, n] {
-#if 1
+#if 0
                 // k < i
                 tbb::parallel_for(tbb::blocked_range<size_t>(k + 1, n),
                     [this, &firstDimOffset, kOffset, n](tbb::blocked_range<size_t>& r)
@@ -465,7 +465,7 @@ SSSR::_initializePID()
 
         auto t2 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-        std::cout << k << " ::: " << duration << std::endl;
+        // std::cout << k << " ::: " << duration << std::endl;
     }
 
 #ifdef _VERBOSE
