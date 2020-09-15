@@ -311,18 +311,10 @@ SSSR::SSSR(const UndirectedGraph& graph, const Settings& settings)
 const std::vector<UndirectedGraph>&
 SSSR::run()
 {
-    std::cout << "Initialize" << std::endl;
     _initializePID();
-
-    std::cout << "Candidates" << std::endl;
     _makeCandidateRings();
-
-    std::cout << "Construct" << std::endl;
     _constructSSSR();
-
-    std::cout << "Convert" << std::endl;
     _convertNodeIndices();
-
     return mSSSR;
 }
 
