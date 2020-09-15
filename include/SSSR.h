@@ -334,59 +334,109 @@ SSSR::_initializePID()
 
         auto t1 = std::chrono::high_resolution_clock::now();
 
-        tbb::parallel_invoke(
-            [this, &firstDimOffset, k] {
-                // i < k
-                for (size_t i = 0; i < k; ++i) {
-                    // const size_t ik = mDold.index(i, k);
-                    const size_t iOffset = firstDimOffset(i);
-                    const size_t ik      = iOffset + k;
+        // i < k
+        for (size_t i = 0; i < k; ++i) {
+            // const size_t ik = mDold.index(i, k);
+            const size_t iOffset = firstDimOffset(i);
+            const size_t ik      = iOffset + k;
 
-                    // i < j < k
-                    for (size_t j = i + 1; j < k; ++j) {
-                        // const size_t ij = mDold.index(i, j);
-                        // const size_t kj = mDold.index(j, k);
-                        const size_t ij = iOffset + j;
-                        const size_t kj = firstDimOffset(j) + k;
-                        this->_process(ij, ik, kj);
-                    }
-                }
-            },
-            [this, &firstDimOffset, k, kOffset, n] {
-                // i < k
-                for (size_t i = 0; i < k; ++i) {
-                    // const size_t ik = mDold.index(i, k);
-                    const size_t iOffset = firstDimOffset(i);
-                    const size_t ik      = iOffset + k;
-
-                    // k < j
-                    for (size_t j = k + 1; j < n; ++j) {
-                        // const size_t ij = mDold.index(i, j);
-                        // const size_t kj = mDold.index(k, j);
-                        const size_t ij = iOffset + j;
-                        const size_t kj = kOffset + j;
-                        _process(ij, ik, kj);
-                    }
-                }
-            },
-            [this, &firstDimOffset, k, kOffset, n] {
-                // k < i
-                for (size_t i = k + 1; i < n; ++i) {
-                    // const size_t ik = mDold.index(k, i);
-                    const size_t iOffset = firstDimOffset(i);
-                    const size_t ik      = kOffset + i;
-
-                    // i < j
-                    for (size_t j = i + 1; j < n; ++j) {
-                        // const size_t ij = mDold.index(i, j);
-                        // const size_t kj = mDold.index(k, j);
-                        const size_t ij = iOffset + j;
-                        const size_t kj = kOffset + j;
-                        _process(ij, ik, kj);
-                    }
-                }
+            // i < j < k
+            for (size_t j = i + 1; j < k; ++j) {
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(j, k);
+                const size_t ij = iOffset + j;
+                const size_t kj = firstDimOffset(j) + k;
+                this->_process(ij, ik, kj);
             }
-        );
+        }
+
+        // i < k
+        for (size_t i = 0; i < k; ++i) {
+            // const size_t ik = mDold.index(i, k);
+            const size_t iOffset = firstDimOffset(i);
+            const size_t ik      = iOffset + k;
+
+            // k < j
+            for (size_t j = k + 1; j < n; ++j) {
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(k, j);
+                const size_t ij = iOffset + j;
+                const size_t kj = kOffset + j;
+                _process(ij, ik, kj);
+            }
+        }
+
+        // k < i
+        for (size_t i = k + 1; i < n; ++i) {
+            // const size_t ik = mDold.index(k, i);
+            const size_t iOffset = firstDimOffset(i);
+            const size_t ik      = kOffset + i;
+
+            // i < j
+            for (size_t j = i + 1; j < n; ++j) {
+                // const size_t ij = mDold.index(i, j);
+                // const size_t kj = mDold.index(k, j);
+                const size_t ij = iOffset + j;
+                const size_t kj = kOffset + j;
+                _process(ij, ik, kj);
+            }
+        }
+
+        // Parallel portion of the code that Lindsay's laptop can't use yet
+
+        // tbb::parallel_invoke(
+        //     [this, &firstDimOffset, k] {
+        //         // i < k
+        //         for (size_t i = 0; i < k; ++i) {
+        //             // const size_t ik = mDold.index(i, k);
+        //             const size_t iOffset = firstDimOffset(i);
+        //             const size_t ik      = iOffset + k;
+
+        //             // i < j < k
+        //             for (size_t j = i + 1; j < k; ++j) {
+        //                 // const size_t ij = mDold.index(i, j);
+        //                 // const size_t kj = mDold.index(j, k);
+        //                 const size_t ij = iOffset + j;
+        //                 const size_t kj = firstDimOffset(j) + k;
+        //                 this->_process(ij, ik, kj);
+        //             }
+        //         }
+        //     },
+        //     [this, &firstDimOffset, k, kOffset, n] {
+        //         // i < k
+        //         for (size_t i = 0; i < k; ++i) {
+        //             // const size_t ik = mDold.index(i, k);
+        //             const size_t iOffset = firstDimOffset(i);
+        //             const size_t ik      = iOffset + k;
+
+        //             // k < j
+        //             for (size_t j = k + 1; j < n; ++j) {
+        //                 // const size_t ij = mDold.index(i, j);
+        //                 // const size_t kj = mDold.index(k, j);
+        //                 const size_t ij = iOffset + j;
+        //                 const size_t kj = kOffset + j;
+        //                 _process(ij, ik, kj);
+        //             }
+        //         }
+        //     },
+        //     [this, &firstDimOffset, k, kOffset, n] {
+        //         // k < i
+        //         for (size_t i = k + 1; i < n; ++i) {
+        //             // const size_t ik = mDold.index(k, i);
+        //             const size_t iOffset = firstDimOffset(i);
+        //             const size_t ik      = kOffset + i;
+
+        //             // i < j
+        //             for (size_t j = i + 1; j < n; ++j) {
+        //                 // const size_t ij = mDold.index(i, j);
+        //                 // const size_t kj = mDold.index(k, j);
+        //                 const size_t ij = iOffset + j;
+        //                 const size_t kj = kOffset + j;
+        //                 _process(ij, ik, kj);
+        //             }
+        //         }
+        //     }
+        // );
 
         mDold = mDnew;
 
