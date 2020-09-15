@@ -6,12 +6,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <iostream>
 #include <iterator> // std::distance
 #include <list>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
+#include <tbb/blocked_range2d.h>
 
 namespace vspc
 {
@@ -316,48 +321,78 @@ SSSR::run()
 void
 SSSR::_initializePID()
 {
+    const size_t numElem = mDold.numElements();
+    const size_t dim     = mDold.dim();
+
+    // Functor for computing the offset of the first dimension of indices
+    auto firstDimOffset = [numElem, dim](size_t i) {
+        return numElem - ((dim - i) * (dim + 1 - i) / 2 + i);
+    };
+
     for (size_t k = 0, n = mNodeMap.size(); k < n; ++k) {
+        const size_t kOffset = firstDimOffset(k);
 
-        // i < k
-        for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
+        auto t1 = std::chrono::high_resolution_clock::now();
 
-            // i < j < k
-            for (size_t j = i + 1; j < k; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(j, k);
+        tbb::parallel_invoke(
+            [this, &firstDimOffset, k] {
+                // i < k
+                for (size_t i = 0; i < k; ++i) {
+                    // const size_t ik = mDold.index(i, k);
+                    const size_t iOffset = firstDimOffset(i);
+                    const size_t ik      = iOffset + k;
 
-                _process(ij, ik, kj);
+                    // i < j < k
+                    for (size_t j = i + 1; j < k; ++j) {
+                        // const size_t ij = mDold.index(i, j);
+                        // const size_t kj = mDold.index(j, k);
+                        const size_t ij = iOffset + j;
+                        const size_t kj = firstDimOffset(j) + k;
+                        this->_process(ij, ik, kj);
+                    }
+                }
+            },
+            [this, &firstDimOffset, k, kOffset, n] {
+                // i < k
+                for (size_t i = 0; i < k; ++i) {
+                    // const size_t ik = mDold.index(i, k);
+                    const size_t iOffset = firstDimOffset(i);
+                    const size_t ik      = iOffset + k;
+
+                    // k < j
+                    for (size_t j = k + 1; j < n; ++j) {
+                        // const size_t ij = mDold.index(i, j);
+                        // const size_t kj = mDold.index(k, j);
+                        const size_t ij = iOffset + j;
+                        const size_t kj = kOffset + j;
+                        _process(ij, ik, kj);
+                    }
+                }
+            },
+            [this, &firstDimOffset, k, kOffset, n] {
+                // k < i
+                for (size_t i = k + 1; i < n; ++i) {
+                    // const size_t ik = mDold.index(k, i);
+                    const size_t iOffset = firstDimOffset(i);
+                    const size_t ik      = kOffset + i;
+
+                    // i < j
+                    for (size_t j = i + 1; j < n; ++j) {
+                        // const size_t ij = mDold.index(i, j);
+                        // const size_t kj = mDold.index(k, j);
+                        const size_t ij = iOffset + j;
+                        const size_t kj = kOffset + j;
+                        _process(ij, ik, kj);
+                    }
+                }
             }
-        }
-
-        // i < k
-        for (size_t i = 0; i < k; ++i) {
-            const size_t ik = mDold.index(i, k);
-
-            // k <= j
-            for (size_t j = k; j < n; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
-
-                _process(ij, ik, kj);
-            }
-        }
-
-        // k <= i
-        for (size_t i = k; i < n; ++i) {
-            const size_t ik = mDold.index(k, i);
-
-            // i < j
-            for (size_t j = i + 1; j < n; ++j) {
-                const size_t ij = mDold.index(i, j);
-                const size_t kj = mDold.index(k, j);
-
-                _process(ij, ik, kj);
-            }
-        }
+        );
 
         mDold = mDnew;
+
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+        // std::cout << k << " ::: " << duration << std::endl;
     }
 
 #ifdef _VERBOSE
@@ -546,8 +581,14 @@ SSSR::_convertIndices(UndirectedGraph g) const
 void
 SSSR::_process(const size_t ij, const size_t ik, const size_t kj)
 {
-    if (mDold(ij) > mDold(ik) + mDold(kj)) {
-        if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj) + 1) {
+    float dSum = mDold(ik) + mDold(kj);
+    if (dSum > mSettings.getMaxCycleLength() / 2) {
+        dSum = INFINITY;
+    }
+    const bool isNotInf = !std::isinf(mDold(ij));
+
+    if (mDold(ij) > dSum) {
+        if (isNotInf && mDold(ij) == dSum + 1) {
 #ifdef _DEBUG
             assert(!mP(ij).empty());
 #endif
@@ -555,19 +596,19 @@ SSSR::_process(const size_t ij, const size_t ik, const size_t kj)
         } else {
             mPp(ij).clear();
         }
-        mDnew(ij) = mDold(ik) + mDold(kj);
+        mDnew(ij) = dSum;
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
 #endif
         mP(ij) = {merge(mP(ik).front(), mP(kj).front())};
-    } else if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj)) {
+    } else if (isNotInf && mDold(ij) == dSum) {
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
 #endif
         mP(ij).push_back(merge(mP(ik).front(), mP(kj).front()));
-    } else if (!std::isinf(mDold(ij)) && mDold(ij) == mDold(ik) + mDold(kj) - 1) {
+    } else if (isNotInf && mDold(ij) == dSum - 1) {
 #ifdef _DEBUG
         assert(!mP(ik).empty());
         assert(!mP(kj).empty());
