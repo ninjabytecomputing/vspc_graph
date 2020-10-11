@@ -15,6 +15,5 @@ include(CPack)
 include_directories("include")
 
 add_executable(vspc_graph src/main.cpp)
-target_link_libraries(vspc_graph tbb)
 
 install(TARGETS vspc_graph DESTINATION bin)

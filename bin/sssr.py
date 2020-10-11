@@ -28,7 +28,6 @@ class FileManager:
         # Keep files whose base file name starts with graph
         files = [f for f in files if os.path.basename(f).startswith('graph')]
 
-
         self.filesDNE         = []
         self.filesNoOverwrite = []
         self.filesIO          = []
@@ -36,10 +35,6 @@ class FileManager:
         self.verbose       = verbose
         self.maxFileLength = max(len(self.CONST_OUT_FILE),
                                  len(self.CONST_SKIP_FILE))
-
-        self.separator    = ''
-        self.outputTitle  = ''
-        self.skippedTitle = ''
 
         for f in files:
             self._sortFile(f, overwrite)
@@ -56,38 +51,54 @@ class FileManager:
         input files that were skipped are then printed as well.
         '''
         # Early out if there are no files to process
-        if len(self.filesIO) > 0:
-            if self.verbose:
-                self._printSeparator()
-                self._printOutputTitle()
-                self._printSeparator()
-
-            # Initialize lock for printing in parallel
-            lock = mp.Lock()
-            # Initialize pool for launching tasks asynchronously
-            pool = mp.Pool(initializer = self._initLock,
-                           initargs    = (lock,),
-                           processes   = mp.cpu_count()-1)
-            # Launch asynchronous processes
-            pool.map_async(self._processFile, self.filesIO)
-            pool.close()
-            pool.join()
-            if self.verbose:
-                self._printSeparator()
-
         if self.verbose:
+            if len(self.filesIO) > 0:
+                self._printOutputTitle()
+
+                # Initialize lock for printing in parallel
+                lock = mp.Lock()
+                # Initialize pool for launching tasks asynchronously
+                pool = mp.Pool(initializer = self._initLock,
+                               initargs    = (lock,),
+                               processes   = mp.cpu_count()-1)
+                # Launch asynchronous processes
+                pool.map_async(self._processFileAsync, self.filesIO)
+                pool.close()
+                pool.join()
+                self._printSeparator()
+
             if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
                 # If there were no files to process, then we need to first
                 # print a separator line.
                 if len(self.filesIO) == 0:
                     self._printSeparator()
                 self._printSkippedTitle()
-                self._printSeparator()
-
-                # Print skipped files
                 self._printSkippedFiles()
+
+    def launchSerial(self):
+        '''
+        Process all files serially. If verbose output is enabled,
+        status updates are printed to the terminal when each file has
+        finished. After all files have been processed, all of the
+        input files that were skipped are then printed as well.
+        '''
+        # Early out if there are no files to process
+        if self.verbose:
+            if len(self.filesIO) > 0:
+                self._printOutputTitle()
+
+                for iopair in self.filesIO:
+                    self._processFileSerial(iopair)
+
                 self._printSeparator()
 
+            if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                # If there were no files to process, then we need to first
+                # print a separator line.
+                if len(self.filesIO) == 0:
+                    self._printSeparator()
+                self._printSkippedTitle()
+                self._printSkippedFiles()
 
     def _printSeparator(self):
         ''' Print separator '''
@@ -95,11 +106,14 @@ class FileManager:
 
     def _printOutputTitle(self):
         ''' Print title for the output files section '''
+        self._printSeparator()
         print(self.outputTitle)
+        self._printSeparator()
 
     def _printSkippedTitle(self):
         ''' Print title for the skipped files section '''
         print(self.skippedTitle)
+        self._printSeparator()
 
     def _printSkippedFiles(self):
         ''' Print all skipped files. '''
@@ -115,11 +129,12 @@ class FileManager:
             out += ' ' * (self.maxFileLength - len(f) + 1)
             out += '| ' + '\033[96m' + self.CONST_NO_WRITE + '\033[0m' + ' |'
             print(out)
+        self._printSeparator()
 
-    def _processFile(self, ioPair):
+    def _processFileAsync(self, ioPair):
         '''
-        Call the C++ executable on the input-output file name pair, and print
-        a status update when it's done.
+        Call the C++ executable (asynchronously) on the input-output file name
+        pair, and print a status update when it's done.
         '''
         greenStart = '\033[32m'
         greenEnd   = '\033[0m'
@@ -128,11 +143,27 @@ class FileManager:
         subprocess.check_call(shlex.split(cmd))
         if self.verbose:
             lock.acquire()
-            stat = '| ' + outFile
+            stat  = '| ' + outFile
             stat += ' ' * (self.maxFileLength - len(outFile) + 1)
             stat += '|   ' + '\033[32m' + self.CONST_DONE + '\033[0m' + '   |'
             print(stat)
             lock.release()
+
+    def _processFileSerial(self, ioPair):
+        '''
+        Call the C++ executable (serially) on the input-output file name
+        pair, and print a status update when it's done.
+        '''
+        greenStart = '\033[32m'
+        greenEnd   = '\033[0m'
+        inFile, outFile = ioPair
+        cmd = ' '.join([EXE, inFile, outFile])
+        subprocess.check_call(shlex.split(cmd))
+        if self.verbose:
+            stat  = '| ' + outFile
+            stat += ' ' * (self.maxFileLength - len(outFile) + 1)
+            stat += '|   ' + '\033[32m' + self.CONST_DONE + '\033[0m' + '   |'
+            print(stat)
 
     def _sortFile(self, f, overwrite):
         '''
@@ -207,10 +238,17 @@ class FileManager:
 
 
 def main(files):
-    # Initialize path to the executable, which should be in the same directory
+    # Initialize path to the executable, which must be in the same directory
     # as this script if it was installed via CMake
     global EXE
     EXE = os.path.dirname(os.path.realpath(__file__)) + '/vspc_graph'
+    if not os.path.exists(EXE):
+        print("Error: " + EXE + " does not exist")
+        return
+    else:
+        # If there are spaces in the executable path, we must surround with quotes.
+        if " " in EXE:
+            EXE = '"' + EXE + '"'
 
     # Check for any flags
     parser = argparse.ArgumentParser(
@@ -224,12 +262,18 @@ def main(files):
                         help='overwrite all output files already generated')
     parser.add_argument('--verbose', action='store_true',
                         help='print file information during runtime')
+    parser.add_argument('--parallel', action='store_true',
+                        help='process multiple input files in parallel')
     args = parser.parse_args()
 
     # Initialize FileManager class, which does everything for us
     manager = FileManager(args.files, args.overwrite, args.verbose)
-    # Launch processes in parallel
-    manager.launchParallel()
+
+    # Process files
+    if args.parallel:
+        manager.launchParallel()
+    else:
+        manager.launchSerial()
 
 
 if __name__ == '__main__':
