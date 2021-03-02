@@ -51,29 +51,32 @@ class FileManager:
         input files that were skipped are then printed as well.
         '''
         # Early out if there are no files to process
-        if self.verbose:
-            if len(self.filesIO) > 0:
+        if len(self.filesIO) > 0:
+            if self.verbose:
                 self._printOutputTitle()
 
-                # Initialize lock for printing in parallel
-                lock = mp.Lock()
-                # Initialize pool for launching tasks asynchronously
-                pool = mp.Pool(initializer = self._initLock,
-                               initargs    = (lock,),
-                               processes   = mp.cpu_count()-1)
-                # Launch asynchronous processes
-                pool.map_async(self._processFileAsync, self.filesIO)
-                pool.close()
-                pool.join()
-                self._printSeparator()
+            # Initialize lock for printing in parallel
+            lock = mp.Lock()
+            # Initialize pool for launching tasks asynchronously
+            pool = mp.Pool(initializer = self._initLock,
+                           initargs    = (lock,),
+                           processes   = mp.cpu_count()-1)
+            # Launch asynchronous processes
+            pool.map_async(self._processFileAsync, self.filesIO)
+            pool.close()
+            pool.join()
 
-            if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
-                # If there were no files to process, then we need to first
-                # print a separator line.
-                if len(self.filesIO) == 0:
+            if self.verbose:
+                if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                    self._printSkippedTitle()
+                    self._printSkippedFiles()
+                else:
                     self._printSeparator()
-                self._printSkippedTitle()
-                self._printSkippedFiles()
+        else:
+            if self.verbose:
+                if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                    self._printSkippedTitle()
+                    self._printSkippedFiles()
 
     def launchSerial(self):
         '''
@@ -83,22 +86,24 @@ class FileManager:
         input files that were skipped are then printed as well.
         '''
         # Early out if there are no files to process
-        if self.verbose:
-            if len(self.filesIO) > 0:
+        if len(self.filesIO) > 0:
+            if self.verbose:
                 self._printOutputTitle()
 
-                for iopair in self.filesIO:
-                    self._processFileSerial(iopair)
+            for iopair in self.filesIO:
+                self._processFileSerial(iopair)
 
-                self._printSeparator()
-
-            if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
-                # If there were no files to process, then we need to first
-                # print a separator line.
-                if len(self.filesIO) == 0:
+            if self.verbose:
+                if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                    self._printSkippedTitle()
+                    self._printSkippedFiles()
+                else:
                     self._printSeparator()
-                self._printSkippedTitle()
-                self._printSkippedFiles()
+        else:
+            if self.verbose:
+                if len(self.filesDNE) > 0 or len(self.filesNoOverwrite) > 0:
+                    self._printSkippedTitle()
+                    self._printSkippedFiles()
 
     def _printSeparator(self):
         ''' Print separator '''
@@ -112,6 +117,7 @@ class FileManager:
 
     def _printSkippedTitle(self):
         ''' Print title for the skipped files section '''
+        self._printSeparator()
         print(self.skippedTitle)
         self._printSeparator()
 
@@ -134,10 +140,9 @@ class FileManager:
     def _processFileAsync(self, ioPair):
         '''
         Call the C++ executable (asynchronously) on the input-output file name
-        pair, and print a status update when it's done.
+        pair, and print a status update when it's done. The lock guarantees
+        that the verbose output is thread-safe.
         '''
-        greenStart = '\033[32m'
-        greenEnd   = '\033[0m'
         inFile, outFile = ioPair
         cmd = ' '.join([EXE, inFile, outFile])
         subprocess.check_call(shlex.split(cmd))
@@ -154,8 +159,6 @@ class FileManager:
         Call the C++ executable (serially) on the input-output file name
         pair, and print a status update when it's done.
         '''
-        greenStart = '\033[32m'
-        greenEnd   = '\033[0m'
         inFile, outFile = ioPair
         cmd = ' '.join([EXE, inFile, outFile])
         subprocess.check_call(shlex.split(cmd))
